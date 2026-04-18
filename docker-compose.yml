@@ -27,8 +27,8 @@ services:
         NIFI_VERSION: ${NIFI_VERSION:-2.8.0}
         POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
     depends_on:
-      gpdb:
-        condition: service_healthy
+      liquibase:
+        condition: service_completed_successfully
     ports:
       - "${NIFI_PORT:-8443}:8443"
     environment:
@@ -54,6 +54,26 @@ services:
       timeout: 10s
       retries: 10
       start_period: 2m
+
+  liquibase:
+    build:
+      context: ./liquibase
+      args:
+        LIQUIBASE_VERSION: ${LIQUIBASE_VERSION:-5.0.2}
+        POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
+    depends_on:
+      gpdb:
+        condition: service_healthy
+    command:
+      - --search-path=/liquibase/changelog
+      - --changelog-file=root.yaml
+      - --url=jdbc:postgresql://gpdb:5432/${GREENPLUM_DATABASE_NAME:-gpdb}
+      - --username=gpadmin
+      - --password=${GREENPLUM_PASSWORD:-gpadminpw}
+      - --log-level=${LIQUIBASE_LOG_LEVEL:-info}
+      - update
+    volumes:
+      - ./liquibase/changelog:/liquibase/changelog:ro
 
 volumes:
   gpdata:
