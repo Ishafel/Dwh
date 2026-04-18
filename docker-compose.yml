@@ -20,6 +20,27 @@ services:
       retries: 10
       start_period: 90s
 
+  gpfdist:
+    image: woblerr/greenplum:6.27.1
+    hostname: gpfdist
+    command:
+      - bash
+      - -lc
+      - |
+        source /usr/local/greenplum-db/greenplum_path.sh
+        mkdir -p /data/landing
+        exec gpfdist -d /data/landing -p 8081 -l /tmp/gpfdist.log
+    ports:
+      - "${GPFDIST_PORT:-8081}:8081"
+    volumes:
+      - ./data/landing:/data/landing:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pgrep -x gpfdist >/dev/null"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
   nifi:
     build:
       context: ./nifi
@@ -48,6 +69,7 @@ services:
       - nifi_provenance_repository:/opt/nifi/nifi-current/provenance_repository
       - nifi_state:/opt/nifi/nifi-current/state
       - nifi_logs:/opt/nifi/nifi-current/logs
+      - ./data/landing:/data/landing
     healthcheck:
       test: ["CMD-SHELL", "curl -kfsS https://localhost:8443/nifi/ >/dev/null"]
       interval: 30s

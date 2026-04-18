@@ -7,3 +7,8 @@ logs/
 target/
 dbt_packages/
 .dbt/.user.yml
+
+data/landing/**
+!data/landing/
+!data/landing/example_customers/
+!data/landing/example_customers/sample_customers.csv
