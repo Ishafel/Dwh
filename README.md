@@ -3,6 +3,8 @@
 Локальный Docker Compose стек с Greenplum 6 и Apache NiFi 2.8.0.
 Миграции БД накатываются отдельным контейнером Liquibase после готовности Greenplum.
 В образ Liquibase добавлен PostgreSQL JDBC-драйвер.
+Для загрузки файлов в Greenplum добавлен `gpfdist`, который раздает локальную landing-зону
+`data/landing`.
 
 ## Запуск
 
@@ -134,3 +136,49 @@ Password: gpadminpw
 ```
 
 Если поменяешь `GREENPLUM_DATABASE_NAME` или `GREENPLUM_PASSWORD`, укажи те же значения в NiFi.
+
+## External tables через gpfdist
+
+`gpfdist` публикует каталог:
+
+```text
+data/landing
+```
+
+Внутри Docker-сети Greenplum читает файлы по адресу:
+
+```text
+gpfdist://gpfdist:8081/<folder>/*.csv
+```
+
+Для локальной проверки уже добавлен пример:
+
+```text
+data/landing/example_customers/sample_customers.csv
+```
+
+Liquibase создает схемы `ext` и `stg`, external table `ext.example_customers_raw`
+и внутреннюю staging-таблицу `stg.example_customers`.
+
+Проверить чтение external table:
+
+```bash
+docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb \
+  -c "SELECT * FROM ext.example_customers_raw;"
+```
+
+Загрузить пример во внутреннюю staging-таблицу:
+
+```bash
+docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb \
+  -c "TRUNCATE stg.example_customers; INSERT INTO stg.example_customers SELECT customer_id::bigint, full_name, email, created_at::timestamp FROM ext.example_customers_raw;"
+```
+
+Для NiFi каталог доступен внутри контейнера как:
+
+```text
+/data/landing
+```
+
+Например, файлы для новой сущности можно складывать в `/data/landing/orders/`,
+а external table создавать с `LOCATION ('gpfdist://gpfdist:8081/orders/*.csv')`.
