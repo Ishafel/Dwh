@@ -1,12 +1,17 @@
 # Greenplum 6 + NiFi
 
 Локальный Docker Compose стек с Greenplum 6 и Apache NiFi 2.8.0.
+Миграции БД накатываются отдельным контейнером Liquibase после готовности Greenplum.
+В образ Liquibase добавлен PostgreSQL JDBC-драйвер.
 
 ## Запуск
 
 ```bash
 docker compose up -d --build
 ```
+
+При запуске `gpdb` сначала проходит healthcheck, затем `liquibase` выполняет миграции и завершается,
+после этого стартует NiFi.
 
 Greenplum в этом стеке инициализируется как однонодовый кластер с 4 primary-сегментами.
 Если меняешь число сегментов, нужно пересоздать volume `gpdata`, иначе уже созданный каталог
@@ -55,6 +60,42 @@ docker compose ps gpdb
 ```bash
 docker compose logs -f gpdb
 ```
+
+## Миграции Liquibase
+
+Миграции лежат в:
+
+```text
+liquibase/changelog/migrations/
+```
+
+Корневой changelog:
+
+```text
+liquibase/changelog/root.yaml
+```
+
+Добавляй новые миграции отдельными YAML-файлами в `liquibase/changelog/migrations/`.
+Например:
+
+```text
+0002-create-some-table.yaml
+```
+
+Накатить миграции вручную:
+
+```bash
+docker compose run --rm liquibase
+```
+
+Посмотреть логи последнего запуска:
+
+```bash
+docker compose logs liquibase
+```
+
+Если меняешь `GREENPLUM_DATABASE_NAME` или `GREENPLUM_PASSWORD`, Liquibase возьмет те же значения
+из `.env`.
 
 Зайти в `psql` внутри контейнера:
 
