@@ -1,14 +1,17 @@
 services:
   gpdb:
     image: woblerr/greenplum:6.27.1
+    hostname: gpdb
     stop_grace_period: 2m
     ports:
       - "${GREENPLUM_PORT:-5433}:5432"
     environment:
       GREENPLUM_PASSWORD: ${GREENPLUM_PASSWORD:-gpadminpw}
       GREENPLUM_DATABASE_NAME: ${GREENPLUM_DATABASE_NAME:-gpdb}
+    command: ["/greenplum/init-4-segments.sh"]
     volumes:
       - gpdata:/data
+      - ./greenplum/init-4-segments.sh:/greenplum/init-4-segments.sh:ro
     shm_size: "1gb"
     healthcheck:
       test: ["CMD-SHELL", "/usr/local/greenplum-db/bin/pg_isready -U gpadmin -d $${GREENPLUM_DATABASE_NAME:-gpdb} -h localhost -p 5432"]
