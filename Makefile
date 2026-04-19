@@ -1,6 +1,15 @@
 SHELL := /bin/bash
 .DEFAULT_GOAL := test
 
+-include .env
+
+GREENPLUM_DATABASE_NAME ?= gpdb
+CLICKHOUSE_DB ?= dwh
+CLICKHOUSE_USER ?= dwh
+CLICKHOUSE_PASSWORD ?= dwhpw
+NIFI_PORT ?= 8443
+NIFI_HEALTH_URL ?= https://localhost:$(NIFI_PORT)/nifi/
+
 .PHONY: test test-compose test-env test-migrations test-landing test-shell test-stack test-stack-greenplum test-stack-clickhouse test-stack-nifi
 
 test: test-compose test-env test-migrations test-landing test-shell
@@ -71,14 +80,14 @@ test-stack: test-stack-greenplum test-stack-clickhouse test-stack-nifi
 
 test-stack-greenplum:
 	@echo "==> Check live Greenplum"
-	docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb -Atc "SELECT 1;"
-	docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb -Atc "SELECT count(*) FROM ext.example_customers_raw;"
+	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT 1;"
+	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_customers_raw;"
 
 test-stack-clickhouse:
 	@echo "==> Check live ClickHouse"
-	docker compose exec -T clickhouse clickhouse-client --user dwh --password dwhpw --database dwh --query "SELECT 1"
-	docker compose exec -T clickhouse clickhouse-client --user dwh --password dwhpw --database dwh --query "DESCRIBE TABLE example_events"
+	@docker compose exec -T clickhouse clickhouse-client --user "$(CLICKHOUSE_USER)" --password "$(CLICKHOUSE_PASSWORD)" --database "$(CLICKHOUSE_DB)" --query "SELECT 1"
+	@docker compose exec -T clickhouse clickhouse-client --user "$(CLICKHOUSE_USER)" --password "$(CLICKHOUSE_PASSWORD)" --database "$(CLICKHOUSE_DB)" --query "DESCRIBE TABLE example_events"
 
 test-stack-nifi:
 	@echo "==> Check live NiFi"
-	curl -kfsS https://localhost:8443/nifi/ >/dev/null
+	@curl -kfsS "$(NIFI_HEALTH_URL)" >/dev/null

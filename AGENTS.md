@@ -112,7 +112,8 @@ gpfdist sample data, and executable shell entrypoints.
 
 When the Docker Compose stack is already running, use `make test-stack` for integration
 checks against live Greenplum, ClickHouse, and NiFi services. This target is expected to
-fail when containers are not running.
+fail when containers are not running. Stack checks read `.env` and fall back to the same
+defaults as `docker-compose.yml`.
 
 For schema or stack changes, also validate with the smallest relevant Docker Compose commands:
 

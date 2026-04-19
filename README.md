@@ -330,7 +330,8 @@ make test-stack
 ```
 
 Эта цель делает реальные запросы к Greenplum, ClickHouse и NiFi. Если контейнеры не запущены,
-`make test-stack` должен упасть.
+`make test-stack` должен упасть. Для подключения используются значения из `.env` с такими же
+defaults, как в `docker-compose.yml`.
 
 На GitHub эти проверки запускаются workflow `.github/workflows/tests.yml` для pull request,
 push в `main` и ручного `workflow_dispatch`.
