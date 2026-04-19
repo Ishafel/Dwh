@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0001-create-example-events
+      author: codex
+      changes:
+        - sql:
+            splitStatements: false
+            sql: |
+              CREATE TABLE IF NOT EXISTS example_events (
+                  event_id UInt64,
+                  event_name String,
+                  event_time DateTime
+              )
+              ENGINE = MergeTree
+              ORDER BY (event_time, event_id);
+      rollback:
+        - sql:
+            sql: DROP TABLE IF EXISTS example_events;

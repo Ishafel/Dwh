@@ -49,7 +49,9 @@ services:
         POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
         CLICKHOUSE_JDBC_VERSION: ${CLICKHOUSE_JDBC_VERSION:-0.9.7}
     depends_on:
-      liquibase:
+      liquibase-greenplum:
+        condition: service_completed_successfully
+      liquibase-clickhouse:
         condition: service_completed_successfully
     ports:
       - "${NIFI_PORT:-8443}:8443"
@@ -79,7 +81,7 @@ services:
       start_period: 2m
 
   clickhouse:
-    image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-latest}
+    image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-26.3.9.8}
     hostname: clickhouse
     ports:
       - "${CLICKHOUSE_HTTP_PORT:-8123}:8123"
@@ -99,11 +101,31 @@ services:
       retries: 10
       start_period: 30s
 
-  liquibase:
+  liquibase-clickhouse:
     build:
-      context: ./liquibase
+      context: ./liquibase-clickhouse
       args:
-        LIQUIBASE_VERSION: ${LIQUIBASE_VERSION:-5.0.2}
+        LIQUIBASE_VERSION: ${CLICKHOUSE_LIQUIBASE_VERSION:-4.33.0}
+        CLICKHOUSE_JDBC_VERSION: ${CLICKHOUSE_JDBC_VERSION:-0.9.7}
+        CLICKHOUSE_LIQUIBASE_EXTENSION_VERSION: ${CLICKHOUSE_LIQUIBASE_EXTENSION_VERSION:-0.9.1}
+    depends_on:
+      clickhouse:
+        condition: service_healthy
+    command:
+      - --search-path=/liquibase/changelog
+      - --changelog-file=root.yaml
+      - --url=jdbc:clickhouse://clickhouse:8123/${CLICKHOUSE_DB:-dwh}
+      - --username=${CLICKHOUSE_USER:-dwh}
+      - --password=${CLICKHOUSE_PASSWORD:-dwhpw}
+      - --driver=com.clickhouse.jdbc.ClickHouseDriver
+      - --log-level=${CLICKHOUSE_LIQUIBASE_LOG_LEVEL:-info}
+      - update
+
+  liquibase-greenplum:
+    build:
+      context: ./liquibase-greenplum
+      args:
+        LIQUIBASE_VERSION: ${GREENPLUM_LIQUIBASE_VERSION:-5.0.2}
         POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
     depends_on:
       gpdb:
@@ -114,11 +136,8 @@ services:
       - --url=jdbc:postgresql://gpdb:5432/${GREENPLUM_DATABASE_NAME:-gpdb}
       - --username=gpadmin
       - --password=${GREENPLUM_PASSWORD:-gpadminpw}
-      - --log-level=${LIQUIBASE_LOG_LEVEL:-info}
+      - --log-level=${GREENPLUM_LIQUIBASE_LOG_LEVEL:-info}
       - update
-    volumes:
-      - ./liquibase/changelog:/liquibase/changelog:ro
-
 volumes:
   gpdata:
   nifi_conf:
