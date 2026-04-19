@@ -9,7 +9,6 @@ on:
 concurrency:
   group: dwh-greenplum-production
   cancel-in-progress: false
-test
 jobs:
   deploy:
     name: Deploy DWH stack
