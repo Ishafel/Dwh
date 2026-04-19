@@ -14,7 +14,6 @@ jobs:
   deploy:
     name: Deploy DWH stack
     if: github.repository == 'Ishafel/Dwh' && github.ref == 'refs/heads/main'
-    test
     runs-on:
       - self-hosted
       - linux
