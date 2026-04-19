@@ -1,8 +1,11 @@
-# Greenplum 6 + NiFi
+# Greenplum 6 + NiFi + ClickHouse
 
-Локальный Docker Compose стек с Greenplum 6 и Apache NiFi 2.8.0.
-Миграции БД накатываются отдельным контейнером Liquibase после готовности Greenplum.
-В образ Liquibase добавлен PostgreSQL JDBC-драйвер.
+Локальный Docker Compose стек с Greenplum 6, Apache NiFi 2.8.0 и ClickHouse.
+Миграции Greenplum накатываются отдельным контейнером Liquibase после готовности Greenplum.
+Миграции ClickHouse накатываются отдельным контейнером Liquibase после готовности ClickHouse.
+В образ `liquibase-greenplum` добавлен PostgreSQL JDBC-драйвер.
+В образ `liquibase-clickhouse` добавлены ClickHouse JDBC-драйвер и ClickHouse extension.
+В образ NiFi добавлены PostgreSQL и ClickHouse JDBC-драйверы.
 Для загрузки файлов в Greenplum добавлен `gpfdist`, который раздает локальную landing-зону
 `data/landing`.
 
@@ -12,8 +15,9 @@
 docker compose up -d --build
 ```
 
-При запуске `gpdb` сначала проходит healthcheck, затем `liquibase` выполняет миграции и завершается,
-после этого стартует NiFi.
+При запуске `gpdb` сначала проходит healthcheck, затем `liquibase-greenplum` выполняет Greenplum-миграции и завершается.
+ClickHouse стартует отдельным сервисом, затем `liquibase-clickhouse` выполняет ClickHouse-миграции и завершается.
+NiFi стартует после успешного завершения обеих миграций.
 
 Greenplum в этом стеке инициализируется как однонодовый кластер с 4 primary-сегментами.
 Если меняешь число сегментов, нужно пересоздать volume `gpdata`, иначе уже созданный каталог
@@ -63,21 +67,70 @@ docker compose ps gpdb
 docker compose logs -f gpdb
 ```
 
-## Миграции Liquibase
+## Управление ClickHouse
 
-Миграции лежат в:
+HTTP-интерфейс ClickHouse:
 
 ```text
-liquibase/changelog/migrations/
+http://localhost:8123
+```
+
+Native-порт ClickHouse:
+
+```text
+localhost:9000
+```
+
+Дефолтные параметры подключения из `.env.example`:
+
+```text
+Database: dwh
+User: dwh
+Password: dwhpw
+```
+
+Проверить ClickHouse через HTTP:
+
+```bash
+curl 'http://localhost:8123/?user=dwh&password=dwhpw' --data-binary 'SELECT 1'
+```
+
+Зайти в `clickhouse-client` внутри контейнера:
+
+```bash
+docker compose exec clickhouse clickhouse-client \
+  --user dwh \
+  --password dwhpw \
+  --database dwh
+```
+
+Посмотреть статус сервиса:
+
+```bash
+docker compose ps clickhouse
+```
+
+Посмотреть логи ClickHouse:
+
+```bash
+docker compose logs -f clickhouse
+```
+
+## Миграции Liquibase для Greenplum
+
+Миграции Greenplum лежат в:
+
+```text
+liquibase-greenplum/changelog/migrations/
 ```
 
 Корневой changelog:
 
 ```text
-liquibase/changelog/root.yaml
+liquibase-greenplum/changelog/root.yaml
 ```
 
-Добавляй новые миграции отдельными YAML-файлами в `liquibase/changelog/migrations/`.
+Добавляй новые миграции отдельными YAML-файлами в `liquibase-greenplum/changelog/migrations/`.
 Например:
 
 ```text
@@ -87,13 +140,14 @@ liquibase/changelog/root.yaml
 Накатить миграции вручную:
 
 ```bash
-docker compose run --rm liquibase
+docker compose build liquibase-greenplum
+docker compose run --rm liquibase-greenplum
 ```
 
 Посмотреть логи последнего запуска:
 
 ```bash
-docker compose logs liquibase
+docker compose logs liquibase-greenplum
 ```
 
 Если меняешь `GREENPLUM_DATABASE_NAME` или `GREENPLUM_PASSWORD`, Liquibase возьмет те же значения
@@ -103,6 +157,46 @@ docker compose logs liquibase
 
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
+```
+
+## Миграции Liquibase для ClickHouse
+
+Миграции ClickHouse лежат в:
+
+```text
+liquibase-clickhouse/changelog/migrations/
+```
+
+Корневой changelog:
+
+```text
+liquibase-clickhouse/changelog/root.yaml
+```
+
+Добавляй новые миграции отдельными YAML-файлами в `liquibase-clickhouse/changelog/migrations/`.
+Для таблиц ClickHouse указывай движок явно, например `ENGINE = MergeTree ORDER BY (...)`.
+
+Накатить миграции ClickHouse вручную:
+
+```bash
+docker compose build liquibase-clickhouse
+docker compose run --rm liquibase-clickhouse
+```
+
+Посмотреть логи последнего запуска:
+
+```bash
+docker compose logs liquibase-clickhouse
+```
+
+Проверить пример таблицы после миграций:
+
+```bash
+docker compose exec clickhouse clickhouse-client \
+  --user dwh \
+  --password dwhpw \
+  --database dwh \
+  --query 'DESCRIBE TABLE example_events'
 ```
 
 UI NiFi:
@@ -123,6 +217,12 @@ admin / GreenplumNiFi123
 /opt/nifi/jdbc/postgresql.jar
 ```
 
+И ClickHouse JDBC-драйвер:
+
+```text
+/opt/nifi/jdbc/clickhouse.jar
+```
+
 ## Подключение к Greenplum из NiFi
 
 Для controller service `DBCPConnectionPool` в NiFi используй:
@@ -136,6 +236,20 @@ Password: gpadminpw
 ```
 
 Если поменяешь `GREENPLUM_DATABASE_NAME` или `GREENPLUM_PASSWORD`, укажи те же значения в NiFi.
+
+## Подключение к ClickHouse из NiFi
+
+Для controller service `DBCPConnectionPool` в NiFi используй:
+
+```text
+Database Connection URL: jdbc:clickhouse://clickhouse:8123/dwh
+Database Driver Class Name: com.clickhouse.jdbc.ClickHouseDriver
+Database Driver Location(s): /opt/nifi/jdbc/clickhouse.jar
+Database User: dwh
+Password: dwhpw
+```
+
+Если поменяешь `CLICKHOUSE_DB`, `CLICKHOUSE_USER` или `CLICKHOUSE_PASSWORD`, укажи те же значения в NiFi.
 
 ## External tables через gpfdist
 
