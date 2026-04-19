@@ -13,7 +13,7 @@ concurrency:
 jobs:
   deploy:
     name: Deploy DWH stack
-    if: github.repository == 'Ishafel/Dwh_greenplum' && github.ref == 'refs/heads/main'
+    if: github.repository == 'Ishafel/Dwh' && github.ref == 'refs/heads/main'
     runs-on:
       - self-hosted
       - linux
