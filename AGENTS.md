@@ -16,6 +16,7 @@ or manual commands. Keep this file as the compact working guide.
 ## Repository Map
 
 - `.github/workflows/deploy.yml` - GitHub Actions deployment workflow for `main`.
+- `.github/workflows/tests.yml` - fast Makefile checks for PRs and `main`.
 - `.env.example` - documented local defaults for ports, credentials, versions, and JVM sizing.
 - `docker-compose.yml` - service graph for Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
 - `greenplum/init-4-segments.sh` - single-node Greenplum initialization with 4 primary segments.
@@ -27,6 +28,8 @@ or manual commands. Keep this file as the compact working guide.
 - `liquibase-clickhouse/changelog/migrations/` - ClickHouse migrations.
 - `nifi/Dockerfile` - NiFi image with PostgreSQL and ClickHouse JDBC drivers.
 - `data/landing/` - local landing-zone files served by `gpfdist`.
+- `Makefile` - local fast checks exposed through `make test`.
+- `scripts/test.sh` - compatibility wrapper around `make test`.
 - `scripts/deploy.sh` - production-like deploy script used by GitHub Actions.
 
 ## Current Data Model
@@ -95,8 +98,24 @@ docker compose logs -f nifi
 
 ## Validation
 
-There is no dedicated test runner in the repository yet. For schema or stack changes,
-validate with the smallest relevant Docker Compose commands:
+Run the fast repository checks first:
+
+```bash
+make test
+```
+
+`./scripts/test.sh` is available as a compatibility wrapper around `make test`.
+
+These checks validate Docker Compose syntax, documented environment variables, Liquibase
+migration conventions, Greenplum distribution clauses, ClickHouse engine/order clauses,
+gpfdist sample data, and executable shell entrypoints.
+
+When the Docker Compose stack is already running, use `make test-stack` for integration
+checks against live Greenplum, ClickHouse, and NiFi services. This target is expected to
+fail when containers are not running. Stack checks read `.env` and fall back to the same
+defaults as `docker-compose.yml`.
+
+For schema or stack changes, also validate with the smallest relevant Docker Compose commands:
 
 - For Greenplum migration changes, build and run `liquibase-greenplum`.
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.

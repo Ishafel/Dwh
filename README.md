@@ -9,6 +9,11 @@
 Для загрузки файлов в Greenplum добавлен `gpfdist`, который раздает локальную landing-зону
 `data/landing`.
 
+Для AI-ассистентов и автоматизированных правок есть компактная рабочая инструкция
+`AGENTS.md`. При изменении операций, миграций, портов, credentials или тестов обновляй
+и `README.md`, и `AGENTS.md`, чтобы человекочитаемая документация и tool-facing правила
+не расходились.
+
 ## Запуск
 
 ```bash
@@ -296,6 +301,40 @@ docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb \
 
 Например, файлы для новой сущности можно складывать в `/data/landing/orders/`,
 а external table создавать с `LOCATION ('gpfdist://gpfdist:8081/orders/*.csv')`.
+
+## Тесты
+
+Быстрые проверки репозитория запускаются без поднятия всего Docker Compose стека:
+
+```bash
+make test
+```
+
+`./scripts/test.sh` оставлен как короткая обертка над `make test`.
+
+Тесты проверяют:
+
+- валидность `docker-compose.yml` через `docker compose config`;
+- что переменные из Compose описаны в `.env.example`;
+- порядок и стабильность Liquibase migrations;
+- обязательный `DISTRIBUTED BY` для Greenplum-таблиц;
+- обязательные `ENGINE` и `ORDER BY` для ClickHouse-таблиц;
+- что `gpfdist` external tables указывают на committed sample CSV в `data/landing`;
+- executable bit у shell entrypoints.
+
+Когда стек уже запущен через `docker compose up -d --build`, можно выполнить интеграционные
+проверки живых сервисов:
+
+```bash
+make test-stack
+```
+
+Эта цель делает реальные запросы к Greenplum, ClickHouse и NiFi. Если контейнеры не запущены,
+`make test-stack` должен упасть. Для подключения используются значения из `.env` с такими же
+defaults, как в `docker-compose.yml`.
+
+На GitHub эти проверки запускаются workflow `.github/workflows/tests.yml` для pull request,
+push в `main` и ручного `workflow_dispatch`.
 
 ## Автодеплой через GitHub Actions
 
