@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0005-create-refresh-table-v3
+      author: codex
+      runOnChange: true
+      changes:
+        - sqlFile:
+            path: ../sql/0005-create-refresh-table-v3.sql
+            relativeToChangelogFile: true
+            splitStatements: false

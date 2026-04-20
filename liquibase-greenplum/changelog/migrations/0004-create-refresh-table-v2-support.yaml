@@ -1,0 +1,10 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0004-create-refresh-table-v2-support
+      author: codex
+      runOnChange: true
+      changes:
+        - sqlFile:
+            path: ../sql/0004-create-refresh-table-v2-support.sql
+            relativeToChangelogFile: true
+            splitStatements: false
