@@ -4,10 +4,11 @@
 
 This repository contains a local DWH stack built with Docker Compose:
 
+- PostgreSQL as the operational/source database.
 - Greenplum 6.27.1 as the main PostgreSQL-compatible DWH engine.
 - Apache NiFi 2.8.0 for data flows.
 - ClickHouse for analytical/event-style storage.
-- Liquibase containers for Greenplum and ClickHouse schema migrations.
+- Liquibase containers for PostgreSQL, Greenplum, and ClickHouse schema migrations.
 - `gpfdist` for serving local landing-zone files to Greenplum external tables.
 
 Prefer reading `README.md` first when a task touches operations, ports, credentials,
@@ -18,8 +19,11 @@ or manual commands. Keep this file as the compact working guide.
 - `.github/workflows/deploy.yml` - GitHub Actions deployment workflow for `main`.
 - `.github/workflows/tests.yml` - fast Makefile checks for PRs and `main`.
 - `.env.example` - documented local defaults for ports, credentials, versions, and JVM sizing.
-- `docker-compose.yml` - service graph for Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
+- `docker-compose.yml` - service graph for PostgreSQL, Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
 - `greenplum/init-4-segments.sh` - single-node Greenplum initialization with 4 primary segments.
+- `liquibase-postgres/` - PostgreSQL Liquibase image and changelog.
+- `liquibase-postgres/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
+- `liquibase-postgres/changelog/migrations/` - PostgreSQL migrations.
 - `liquibase-greenplum/` - Greenplum Liquibase image and changelog.
 - `liquibase-greenplum/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
 - `liquibase-greenplum/changelog/migrations/` - Greenplum migrations.
@@ -33,6 +37,10 @@ or manual commands. Keep this file as the compact working guide.
 - `scripts/deploy.sh` - production-like deploy script used by GitHub Actions.
 
 ## Current Data Model
+
+PostgreSQL migrations currently create:
+
+- `dm` schema.
 
 Greenplum migrations currently create:
 
@@ -61,6 +69,13 @@ Stop the full local stack:
 docker compose down
 ```
 
+Run PostgreSQL migrations manually:
+
+```bash
+docker compose build liquibase-postgres
+docker compose run --rm liquibase-postgres
+```
+
 Run Greenplum migrations manually:
 
 ```bash
@@ -73,6 +88,12 @@ Run ClickHouse migrations manually:
 ```bash
 docker compose build liquibase-clickhouse
 docker compose run --rm liquibase-clickhouse
+```
+
+Open PostgreSQL `psql` inside the container:
+
+```bash
+docker compose exec postgres psql -U app -d app
 ```
 
 Open Greenplum `psql` inside the container:
@@ -91,6 +112,7 @@ Check service status and logs:
 
 ```bash
 docker compose ps
+docker compose logs -f postgres
 docker compose logs -f gpdb
 docker compose logs -f clickhouse
 docker compose logs -f nifi
@@ -111,12 +133,13 @@ migration conventions, Greenplum distribution clauses, ClickHouse engine/order c
 gpfdist sample data, and executable shell entrypoints.
 
 When the Docker Compose stack is already running, use `make test-stack` for integration
-checks against live Greenplum, ClickHouse, and NiFi services. This target is expected to
-fail when containers are not running. Stack checks read `.env` and fall back to the same
-defaults as `docker-compose.yml`.
+checks against live PostgreSQL, Greenplum, ClickHouse, and NiFi services. This target is
+expected to fail when containers are not running. Stack checks read `.env` and fall back
+to the same defaults as `docker-compose.yml`.
 
 For schema or stack changes, also validate with the smallest relevant Docker Compose commands:
 
+- For PostgreSQL migration changes, build and run `liquibase-postgres`.
 - For Greenplum migration changes, build and run `liquibase-greenplum`.
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.
 - For Dockerfile or Compose changes, run `docker compose config` and, when practical,
@@ -128,6 +151,8 @@ access.
 
 ## Migration Rules
 
+- Add new PostgreSQL migrations as separate YAML files in
+  `liquibase-postgres/changelog/migrations/`.
 - Add new Greenplum migrations as separate YAML files in
   `liquibase-greenplum/changelog/migrations/`.
 - Add new ClickHouse migrations as separate YAML files in
@@ -141,6 +166,15 @@ access.
   split incorrectly.
 - For Greenplum tables, specify `DISTRIBUTED BY (...)` deliberately.
 - For ClickHouse tables, specify the engine explicitly, usually with `ORDER BY (...)`.
+
+## PostgreSQL Notes
+
+- The local PostgreSQL container exposes `${POSTGRES_PORT:-5434}` on the host and uses
+  port `5432` inside Docker.
+- Defaults are database `app`, user `app`, password `apppw`.
+- PostgreSQL source data is migrated by `liquibase-postgres`.
+- The `postgres_data` Docker volume stores PostgreSQL data files. Do not remove it
+  unless the user explicitly approves.
 
 ## Greenplum Notes
 
@@ -189,11 +223,11 @@ The workflow expects a self-hosted Linux runner with label `dwh-greenplum` and r
 
 The deploy script refuses to continue if tracked local changes exist in `APP_DIR`.
 It uses `git pull --ff-only origin main`, then `docker compose up -d --build`, then
-checks service status, row counts, and NiFi health.
+checks service status, row counts for PostgreSQL, Greenplum, and ClickHouse, and NiFi health.
 
 ## Dangerous Areas
 
-- Do not delete Docker volumes such as `gpdata`, `clickhouse_data`, or NiFi volumes without
+- Do not delete Docker volumes such as `postgres_data`, `gpdata`, `clickhouse_data`, or NiFi volumes without
   explicit user approval.
 - Do not run broad cleanup commands or destructive Git commands without explicit user
   approval.

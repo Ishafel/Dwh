@@ -1,4 +1,23 @@
 services:
+  postgres:
+    image: postgres:${POSTGRES_VERSION:-17.9}
+    hostname: postgres
+    restart: unless-stopped
+    ports:
+      - "${POSTGRES_PORT:-5434}:5432"
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apppw}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-app} -d $${POSTGRES_DB:-app} -h localhost -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
   gpdb:
     image: woblerr/greenplum:6.27.1
     hostname: gpdb
@@ -52,6 +71,8 @@ services:
         CLICKHOUSE_JDBC_VERSION: ${CLICKHOUSE_JDBC_VERSION:-0.9.7}
     restart: unless-stopped
     depends_on:
+      liquibase-postgres:
+        condition: service_completed_successfully
       liquibase-greenplum:
         condition: service_completed_successfully
       liquibase-clickhouse:
@@ -125,6 +146,24 @@ services:
       - --log-level=${CLICKHOUSE_LIQUIBASE_LOG_LEVEL:-info}
       - update
 
+  liquibase-postgres:
+    build:
+      context: ./liquibase-postgres
+      args:
+        LIQUIBASE_VERSION: ${POSTGRES_LIQUIBASE_VERSION:-5.0.2}
+        POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command:
+      - --search-path=/liquibase/changelog
+      - --changelog-file=root.yaml
+      - --url=jdbc:postgresql://postgres:5432/${POSTGRES_DB:-app}
+      - --username=${POSTGRES_USER:-app}
+      - --password=${POSTGRES_PASSWORD:-apppw}
+      - --log-level=${POSTGRES_LIQUIBASE_LOG_LEVEL:-info}
+      - update
+
   liquibase-greenplum:
     build:
       context: ./liquibase-greenplum
@@ -143,6 +182,7 @@ services:
       - --log-level=${GREENPLUM_LIQUIBASE_LOG_LEVEL:-info}
       - update
 volumes:
+  postgres_data:
   gpdata:
   nifi_conf:
   nifi_database_repository:

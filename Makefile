@@ -3,6 +3,9 @@ SHELL := /bin/bash
 
 -include .env
 
+POSTGRES_DB ?= app
+POSTGRES_USER ?= app
+POSTGRES_PASSWORD ?= apppw
 GREENPLUM_DATABASE_NAME ?= gpdb
 CLICKHOUSE_DB ?= dwh
 CLICKHOUSE_USER ?= dwh
@@ -10,7 +13,7 @@ CLICKHOUSE_PASSWORD ?= dwhpw
 NIFI_PORT ?= 8443
 NIFI_HEALTH_URL ?= https://localhost:$(NIFI_PORT)/nifi/
 
-.PHONY: test test-compose test-env test-migrations test-landing test-shell test-stack test-stack-greenplum test-stack-clickhouse test-stack-nifi
+.PHONY: test test-compose test-env test-migrations test-landing test-shell test-stack test-stack-postgres test-stack-greenplum test-stack-clickhouse test-stack-nifi
 
 test: test-compose test-env test-migrations test-landing test-shell
 
@@ -33,12 +36,12 @@ test-env:
 test-migrations:
 	@echo "==> Check Liquibase migration conventions"
 	@set -euo pipefail; \
-	for root in liquibase-greenplum/changelog/root.yaml liquibase-clickhouse/changelog/root.yaml; do \
+	for root in liquibase-postgres/changelog/root.yaml liquibase-greenplum/changelog/root.yaml liquibase-clickhouse/changelog/root.yaml; do \
 		grep -q 'includeAll:' "$${root}"; \
 		grep -q 'path: migrations' "$${root}"; \
 		grep -q 'relativeToChangelogFile: true' "$${root}"; \
 	done; \
-	for dir in liquibase-greenplum/changelog/migrations liquibase-clickhouse/changelog/migrations; do \
+	for dir in liquibase-postgres/changelog/migrations liquibase-greenplum/changelog/migrations liquibase-clickhouse/changelog/migrations; do \
 		for file in "$${dir}"/*.yaml; do \
 			base="$$(basename "$${file}" .yaml)"; \
 			[[ "$${base}" =~ ^[0-9]{4}-[a-z0-9-]+$$ ]] || { echo "Bad migration filename: $${file}"; exit 1; }; \
@@ -76,7 +79,12 @@ test-shell:
 	@test -x scripts/deploy.sh
 	@test -x scripts/test.sh
 
-test-stack: test-stack-greenplum test-stack-clickhouse test-stack-nifi
+test-stack: test-stack-postgres test-stack-greenplum test-stack-clickhouse test-stack-nifi
+
+test-stack-postgres:
+	@echo "==> Check live PostgreSQL"
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" -Atc "SELECT 1;"
+	@docker compose exec -T postgres psql -U "$(POSTGRES_USER)" -d "$(POSTGRES_DB)" -Atc "SELECT CASE WHEN EXISTS (SELECT 1 FROM information_schema.schemata WHERE schema_name = 'dm') THEN 'dm' ELSE 'missing' END;" | grep -qx "dm"
 
 test-stack-greenplum:
 	@echo "==> Check live Greenplum"
