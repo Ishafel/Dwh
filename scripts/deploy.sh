@@ -4,6 +4,11 @@ set -Eeuo pipefail
 APP_DIR="${APP_DIR:-/mnt/bulk/dwh_greenplum}"
 EXPECTED_DOCKER_ROOT="${EXPECTED_DOCKER_ROOT:-/mnt/bulk/docker}"
 NIFI_HEALTH_URL="${NIFI_HEALTH_URL:-https://localhost:8443/nifi/}"
+POSTGRES_DB="${POSTGRES_DB:-app}"
+POSTGRES_USER="${POSTGRES_USER:-app}"
+CLICKHOUSE_DB="${CLICKHOUSE_DB:-dwh}"
+CLICKHOUSE_USER="${CLICKHOUSE_USER:-dwh}"
+CLICKHOUSE_PASSWORD="${CLICKHOUSE_PASSWORD:-dwhpw}"
 
 log() {
   printf '\n[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*"
@@ -78,15 +83,19 @@ if ! git diff --quiet || ! git diff --cached --quiet; then
 fi
 
 run_optional "Docker Compose status before deploy" docker compose ps
+run_optional "PostgreSQL row counts before deploy" \
+  docker compose exec -T postgres \
+    psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc \
+    "select 'dm_schema=' || coalesce((select schema_name from information_schema.schemata where schema_name = 'dm'), 'missing');"
 run_optional "Greenplum row counts before deploy" \
   docker compose exec -T -u gpadmin gpdb \
     /usr/local/greenplum-db/bin/psql -d gpdb -Atc \
     "select 'dwh.channel_notices=' || count(*) from dwh.channel_notices; select 'dwh.chat_messages=' || count(*) from dwh.chat_messages;"
 run_optional "ClickHouse row counts before deploy" \
   docker compose exec -T clickhouse clickhouse-client \
-    --user dwh \
-    --password dwhpw \
-    --database dwh \
+    --user "$CLICKHOUSE_USER" \
+    --password "$CLICKHOUSE_PASSWORD" \
+    --database "$CLICKHOUSE_DB" \
     --query "SELECT 'channel_notices=' || toString(count()) FROM channel_notices; SELECT 'chat_messages=' || toString(count()) FROM chat_messages;"
 
 log "Pulling latest main revision"
@@ -102,6 +111,11 @@ docker compose up -d --build
 log "Docker Compose status after deploy"
 docker compose ps
 
+log "PostgreSQL row counts after deploy"
+docker compose exec -T postgres \
+  psql -U "$POSTGRES_USER" -d "$POSTGRES_DB" -Atc \
+  "select 'dm_schema=' || coalesce((select schema_name from information_schema.schemata where schema_name = 'dm'), 'missing');"
+
 log "Greenplum row counts after deploy"
 docker compose exec -T -u gpadmin gpdb \
   /usr/local/greenplum-db/bin/psql -d gpdb -Atc \
@@ -109,9 +123,9 @@ docker compose exec -T -u gpadmin gpdb \
 
 log "ClickHouse row counts after deploy"
 docker compose exec -T clickhouse clickhouse-client \
-  --user dwh \
-  --password dwhpw \
-  --database dwh \
+  --user "$CLICKHOUSE_USER" \
+  --password "$CLICKHOUSE_PASSWORD" \
+  --database "$CLICKHOUSE_DB" \
   --query "SELECT 'channel_notices=' || toString(count()) FROM channel_notices; SELECT 'chat_messages=' || toString(count()) FROM chat_messages;"
 
 wait_for_nifi
