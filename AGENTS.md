@@ -6,10 +6,12 @@ This repository contains a local DWH stack built with Docker Compose:
 
 - PostgreSQL as the operational/source database.
 - Greenplum 6.27.1 as the main PostgreSQL-compatible DWH engine.
+- Hive Metastore 3.1.3 for the minimal Hive/PXF contour.
 - Apache NiFi 2.8.0 for data flows.
 - ClickHouse for analytical/event-style storage.
 - Liquibase containers for PostgreSQL, Greenplum, and ClickHouse schema migrations.
 - `gpfdist` for serving local landing-zone files to Greenplum external tables.
+- PXF inside the Greenplum container for PostgreSQL JDBC and Hive external tables.
 
 Prefer reading `README.md` first when a task touches operations, ports, credentials,
 or manual commands. Keep this file as the compact working guide.
@@ -20,7 +22,18 @@ or manual commands. Keep this file as the compact working guide.
 - `.github/workflows/tests.yml` - fast Makefile checks for PRs and `main`.
 - `.env.example` - documented local defaults for ports, credentials, versions, and JVM sizing.
 - `docker-compose.yml` - service graph for PostgreSQL, Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
+- `greenplum/Dockerfile` - local Greenplum image layer adding the PostgreSQL JDBC driver for PXF.
+  Compose tags this image as `${GREENPLUM_APP_IMAGE:-dwh-greenplum-gpdb}` so `gpdb`
+  and `pxf-examples` use the same explicit image name.
 - `greenplum/init-4-segments.sh` - single-node Greenplum initialization with 4 primary segments.
+- `greenplum/start-gpfdist.sh` - starts gpfdist for local landing-zone files.
+- `greenplum/create-pxf-example-tables.sh` - creates sample Greenplum PXF external tables after base migrations.
+- `greenplum/init-4-segments.sh` generates the PXF PostgreSQL JDBC server config from `POSTGRES_*` env values.
+- `greenplum/pxf/servers/hive/` - PXF Hive server config for the local Hive Metastore.
+- `hive/conf/hive-site.xml` - server-side Hive Metastore config with embedded Derby.
+- `hive/client-conf/hive-site.xml` - client-side Hive config for `hive-init`.
+- `hive/start-metastore.sh` - starts Hive Metastore and initializes embedded Derby if needed.
+- `hive/init-example.sh` - creates the minimal Hive sample table and data files.
 - `liquibase-postgres/` - PostgreSQL Liquibase image and changelog.
 - `liquibase-postgres/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
 - `liquibase-postgres/changelog/migrations/` - PostgreSQL migrations.
@@ -41,6 +54,7 @@ or manual commands. Keep this file as the compact working guide.
 PostgreSQL migrations currently create:
 
 - `dm` schema.
+- `dm.example_customers` sample source table for PXF checks.
 
 Greenplum migrations currently create:
 
@@ -50,6 +64,17 @@ Greenplum migrations currently create:
 - `ext.example_customers_raw` reading CSV files from
   `gpfdist://gpfdist:8081/example_customers/*.csv`.
 - `stg.example_customers` distributed by `customer_id`.
+
+The `pxf-examples` service currently creates:
+
+- `ext.example_customers_pxf` reading PostgreSQL `dm.example_customers` through
+  `pxf://dm.example_customers?PROFILE=Jdbc&SERVER=postgres`.
+- `ext.example_hive_customers_pxf` reading Hive `demo.example_hive_customers` through
+  `pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive`.
+
+Hive init currently creates:
+
+- `demo.example_hive_customers` external text table over files in `/opt/hive/data/warehouse/example_hive_customers`.
 
 ClickHouse migrations currently create:
 
@@ -83,6 +108,12 @@ docker compose build liquibase-greenplum
 docker compose run --rm liquibase-greenplum
 ```
 
+Create or refresh sample PXF external tables manually:
+
+```bash
+docker compose run --rm pxf-examples
+```
+
 Run ClickHouse migrations manually:
 
 ```bash
@@ -100,6 +131,18 @@ Open Greenplum `psql` inside the container:
 
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
+```
+
+Check PXF status:
+
+```bash
+docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && pxf cluster status'
+```
+
+Check Hive sample through Greenplum PXF:
+
+```bash
+docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb -Atc "SELECT count(*) FROM ext.example_hive_customers_pxf;"
 ```
 
 Open ClickHouse client inside the container:
@@ -141,6 +184,11 @@ For schema or stack changes, also validate with the smallest relevant Docker Com
 
 - For PostgreSQL migration changes, build and run `liquibase-postgres`.
 - For Greenplum migration changes, build and run `liquibase-greenplum`.
+- For PXF changes, build `gpdb`, start the stack, run `pxf cluster status`, run
+  `pxf-examples`, and query `ext.example_customers_pxf` and
+  `ext.example_hive_customers_pxf`.
+- For Hive PXF changes, also start `hive-metastore`, run `hive-init`, and verify
+  `demo.example_hive_customers`.
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.
 - For Dockerfile or Compose changes, run `docker compose config` and, when practical,
   `docker compose up -d --build`.
@@ -182,6 +230,17 @@ access.
   port `5432` inside Docker.
 - Defaults are database `gpdb`, user `gpadmin`, password `gpadminpw`.
 - The cluster is initialized as one Docker node with 4 primary segments.
+- PXF is enabled by default with `GREENPLUM_PXF_ENABLE=true` and exposed as
+  `${PXF_PORT:-5888}` on the host.
+- The Greenplum image is built locally from `greenplum/Dockerfile` to add the PostgreSQL
+  JDBC driver into `/usr/local/pxf/lib/postgresql.jar`.
+- The local PXF JDBC server config is generated by `greenplum/init-4-segments.sh` from
+  `POSTGRES_DB`, `POSTGRES_USER`, and `POSTGRES_PASSWORD`.
+- PXF server configs are copied from `greenplum/pxf/servers/` into `/data/pxf/servers/`
+  by `greenplum/init-4-segments.sh` on each `gpdb` start. If PXF was already prepared,
+  the script runs `pxf cluster sync` after copying configs. If the server config changes
+  while PXF is already running, restart `gpdb` or copy the config and run
+  `pxf cluster sync && pxf cluster restart` inside `gpdb`.
 - If the segment count or initialization shape changes, the `gpdata` Docker volume may
   need to be recreated. Do not remove volumes unless the user explicitly approves.
 - `gpfdist` serves `data/landing` on port `${GPFDIST_PORT:-8081}`.
@@ -194,6 +253,17 @@ access.
 - Defaults are database `dwh`, user `dwh`, password `dwhpw`.
 - ClickHouse Liquibase uses the ClickHouse JDBC driver plus the GoodforGod Liquibase
   ClickHouse extension.
+
+## Hive Notes
+
+- Hive Metastore exposes `${HIVE_METASTORE_PORT:-9083}`.
+- The Hive image is pinned to `${HIVE_PLATFORM:-linux/amd64}` because the official
+  `apache/hive:3.1.3` image is amd64-only.
+- The metastore uses embedded Derby stored in the `hive_metastore_db` Docker volume.
+- Hive table files are stored in the `hive_warehouse` Docker volume and mounted into
+  Greenplum at `/opt/hive/data/warehouse` so PXF can read local-file Hive table data.
+- The Docker default network is explicitly named `dwh-greenplum`; this avoids underscores
+  in reverse-DNS hostnames, which Hive 3 rejects when resolving Metastore URIs.
 
 ## NiFi Notes
 
