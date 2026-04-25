@@ -19,19 +19,31 @@ services:
       start_period: 20s
 
   gpdb:
-    image: woblerr/greenplum:6.27.1
+    image: ${GREENPLUM_APP_IMAGE:-dwh-greenplum-gpdb}
+    build:
+      context: ./greenplum
+      args:
+        GREENPLUM_IMAGE: woblerr/greenplum:${GREENPLUM_VERSION:-6.27.1}
+        POSTGRES_JDBC_VERSION: ${POSTGRES_JDBC_VERSION:-42.7.10}
     hostname: gpdb
     restart: unless-stopped
     stop_grace_period: 2m
     ports:
       - "${GREENPLUM_PORT:-5433}:5432"
+      - "${PXF_PORT:-5888}:5888"
     environment:
       GREENPLUM_PASSWORD: ${GREENPLUM_PASSWORD:-gpadminpw}
       GREENPLUM_DATABASE_NAME: ${GREENPLUM_DATABASE_NAME:-gpdb}
+      GREENPLUM_PXF_ENABLE: ${GREENPLUM_PXF_ENABLE:-true}
+      POSTGRES_DB: ${POSTGRES_DB:-app}
+      POSTGRES_USER: ${POSTGRES_USER:-app}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-apppw}
     command: ["/greenplum/init-4-segments.sh"]
     volumes:
       - gpdata:/data
+      - hive_warehouse:/opt/hive/data/warehouse:ro
       - ./greenplum/init-4-segments.sh:/greenplum/init-4-segments.sh:ro
+      - ./greenplum/pxf/servers:/greenplum/pxf/servers:ro
     shm_size: "1gb"
     healthcheck:
       test: ["CMD-SHELL", "/usr/local/greenplum-db/bin/pg_isready -U gpadmin -d $${GREENPLUM_DATABASE_NAME:-gpdb} -h localhost -p 5432"]
@@ -40,21 +52,53 @@ services:
       retries: 10
       start_period: 90s
 
+  hive-metastore:
+    image: apache/hive:${HIVE_VERSION:-3.1.3}
+    platform: ${HIVE_PLATFORM:-linux/amd64}
+    container_name: hive-metastore
+    hostname: hive-metastore
+    user: root
+    restart: unless-stopped
+    ports:
+      - "${HIVE_METASTORE_PORT:-9083}:9083"
+    volumes:
+      - hive_metastore_db:/opt/hive/metastore_db
+      - hive_warehouse:/opt/hive/data/warehouse
+      - ./hive/conf/hive-site.xml:/opt/hive/conf/hive-site.xml:ro
+      - ./hive/start-metastore.sh:/opt/hive/bin/start-metastore-local.sh:ro
+    entrypoint: ["/opt/hive/bin/start-metastore-local.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -lc '</dev/tcp/localhost/9083'"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+      start_period: 45s
+
+  hive-init:
+    image: apache/hive:${HIVE_VERSION:-3.1.3}
+    platform: ${HIVE_PLATFORM:-linux/amd64}
+    user: root
+    environment:
+      HIVE_CONF_DIR: /opt/hive/client-conf
+    depends_on:
+      hive-metastore:
+        condition: service_healthy
+    volumes:
+      - hive_warehouse:/opt/hive/data/warehouse
+      - ./hive/client-conf:/opt/hive/client-conf:ro
+      - ./hive/init-example.sh:/opt/hive/bin/init-example-local.sh:ro
+    entrypoint: ["/opt/hive/bin/init-example-local.sh"]
+
   gpfdist:
     image: woblerr/greenplum:6.27.1
     hostname: gpfdist
     restart: unless-stopped
-    command:
-      - bash
-      - -lc
-      - |
-        source /usr/local/greenplum-db/greenplum_path.sh
-        mkdir -p /data/landing
-        exec gpfdist -d /data/landing -p 8081 -l /tmp/gpfdist.log
+    command: ["/greenplum/start-gpfdist.sh"]
     ports:
       - "${GPFDIST_PORT:-8081}:8081"
     volumes:
       - ./data/landing:/data/landing:ro
+      - ./greenplum/start-gpfdist.sh:/greenplum/start-gpfdist.sh:ro
     healthcheck:
       test: ["CMD-SHELL", "pgrep -x gpfdist >/dev/null"]
       interval: 10s
@@ -181,9 +225,31 @@ services:
       - --password=${GREENPLUM_PASSWORD:-gpadminpw}
       - --log-level=${GREENPLUM_LIQUIBASE_LOG_LEVEL:-info}
       - update
+
+  pxf-examples:
+    image: ${GREENPLUM_APP_IMAGE:-dwh-greenplum-gpdb}
+    depends_on:
+      liquibase-postgres:
+        condition: service_completed_successfully
+      liquibase-greenplum:
+        condition: service_completed_successfully
+      hive-init:
+        condition: service_completed_successfully
+    environment:
+      GREENPLUM_HOST: gpdb
+      GREENPLUM_DATABASE_NAME: ${GREENPLUM_DATABASE_NAME:-gpdb}
+      PGPASSWORD: ${GREENPLUM_PASSWORD:-gpadminpw}
+    volumes:
+      - ./greenplum/create-pxf-example-tables.sh:/greenplum/create-pxf-example-tables.sh:ro
+    command: ["/greenplum/create-pxf-example-tables.sh"]
+networks:
+  default:
+    name: dwh-greenplum
 volumes:
   postgres_data:
   gpdata:
+  hive_metastore_db:
+  hive_warehouse:
   nifi_conf:
   nifi_database_repository:
   nifi_flowfile_repository:
