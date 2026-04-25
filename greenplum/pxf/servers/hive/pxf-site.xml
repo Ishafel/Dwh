@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <property>
+        <name>pxf.service.user.impersonation</name>
+        <value>false</value>
+    </property>
+    <property>
+        <name>pxf.fs.basePath</name>
+        <value>file:///</value>
+    </property>
+</configuration>
