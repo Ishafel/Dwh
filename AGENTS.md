@@ -226,9 +226,14 @@ access.
   `${PXF_PORT:-5888}` on the host.
 - PXF server configs in `/data/pxf/servers/` are rebuilt from `greenplum/pxf/servers/`
   by `greenplum/init-4-segments.sh` on each `gpdb` start. If PXF was already prepared,
-  the script runs `pxf cluster sync` after rebuilding configs. If the server config changes
-  while PXF is already running, restart `gpdb` or rebuild the config directory and run
-  `pxf cluster sync && pxf cluster restart` inside `gpdb`.
+  the script runs `pxf cluster sync` after rebuilding configs. On first PXF bootstrap,
+  the script waits until `pxf cluster prepare` creates `/data/pxf/conf/pxf-env.sh` before
+  copying server configs, so `/data/pxf` is not made non-empty before prepare. If a previous
+  failed start left only stale `/data/pxf/servers`, the script removes only that config
+  directory and retries normal PXF prepare. If `/data/pxf` has another partial state without
+  `pxf-env.sh`, the script disables PXF for that start so Greenplum can still become healthy.
+  If the server config changes while PXF is already running, restart `gpdb` or rebuild the
+  config directory and run `pxf cluster sync && pxf cluster restart` inside `gpdb`.
 - If the segment count or initialization shape changes, the `gpdata` Docker volume may
   need to be recreated. Do not remove volumes unless the user explicitly approves.
 - `gpfdist` serves `data/landing` on port `${GPFDIST_PORT:-8081}`.

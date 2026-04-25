@@ -45,8 +45,15 @@ docker compose up -d --build
 
 PXF тоже инициализируется внутри Greenplum volume. При каждом старте `gpdb` каталог
 `/data/pxf/servers/` пересобирается из `greenplum/pxf/servers/` и синхронизируется через
-`pxf cluster sync`, если PXF уже был подготовлен. Если PXF уже запущен и ты меняешь
-PXF-конфиги, перезапусти `gpdb` или вручную выполни внутри контейнера:
+`pxf cluster sync`, если PXF уже был подготовлен. На первом старте wrapper не создает
+`/data/pxf/servers/` до `pxf cluster prepare`, чтобы не ломать неидемпотентную подготовку
+PXF на persistent volume. Если после неудачного старта в `/data/pxf` остались только
+server-конфиги без `/data/pxf/conf/pxf-env.sh`, wrapper удалит только эти server-конфиги
+и даст штатному `pxf cluster prepare` выполниться заново. Если `/data/pxf` содержит другой
+частичный state без `pxf-env.sh`, PXF будет отключен только на текущий старт, чтобы
+Greenplum остался доступен без удаления данных.
+
+Если PXF уже запущен и ты меняешь PXF-конфиги, перезапусти `gpdb` или вручную выполни внутри контейнера:
 
 ```bash
 docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && rm -rf /data/pxf/servers && mkdir -p /data/pxf/servers && cp -R /greenplum/pxf/servers/. /data/pxf/servers/ && pxf cluster sync && pxf cluster restart'

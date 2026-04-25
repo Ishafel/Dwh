@@ -83,6 +83,8 @@ test-pxf:
 	@test -x hive/start-metastore.sh
 	@test -x hive/init-example.sh
 	@test -x greenplum/create-pxf-example-tables.sh
+	@grep -q 'is_pxf_base_only_servers' greenplum/init-4-segments.sh
+	@grep -q 'sync_pxf_server_configs_after_prepare' greenplum/init-4-segments.sh
 	@grep -q 'thrift://hive-metastore:9083' greenplum/pxf/servers/hive/hive-site.xml
 	@grep -q 'thrift://hive-metastore:9083' hive/client-conf/hive-site.xml
 	@grep -q 'GREENPLUM_PXF_ENABLE' docker-compose.yml
