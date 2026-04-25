@@ -75,7 +75,6 @@ test-landing:
 
 test-pxf:
 	@echo "==> Check PXF sample configuration"
-	@test -f greenplum/Dockerfile
 	@test -f greenplum/pxf/servers/hive/hive-site.xml
 	@test -f greenplum/pxf/servers/hive/core-site.xml
 	@test -f hive/conf/hive-site.xml
@@ -84,17 +83,11 @@ test-pxf:
 	@test -x hive/start-metastore.sh
 	@test -x hive/init-example.sh
 	@test -x greenplum/create-pxf-example-tables.sh
-	@grep -q 'jdbc:postgresql://postgres:5432/' greenplum/init-4-segments.sh
-	@grep -q 'postgres_db="$${POSTGRES_DB:-app}"' greenplum/init-4-segments.sh
-	@grep -q 'postgres_user="$${POSTGRES_USER:-app}"' greenplum/init-4-segments.sh
-	@grep -q 'postgres_password="$${POSTGRES_PASSWORD:-apppw}"' greenplum/init-4-segments.sh
 	@grep -q 'thrift://hive-metastore:9083' greenplum/pxf/servers/hive/hive-site.xml
 	@grep -q 'thrift://hive-metastore:9083' hive/client-conf/hive-site.xml
 	@grep -q 'GREENPLUM_PXF_ENABLE' docker-compose.yml
-	@grep -q 'GREENPLUM_APP_IMAGE' docker-compose.yml
 	@grep -q 'pxf-examples:' docker-compose.yml
 	@grep -q 'db_host="$${GREENPLUM_HOST:-gpdb}"' greenplum/create-pxf-example-tables.sh
-	@grep -q 'pxf://dm.example_customers?PROFILE=Jdbc&SERVER=postgres' greenplum/create-pxf-example-tables.sh
 	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' greenplum/create-pxf-example-tables.sh
 
 test-shell:
@@ -123,7 +116,6 @@ test-stack-greenplum:
 	@echo "==> Check live Greenplum"
 	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT 1;"
 	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_customers_raw;"
-	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_customers_pxf;"
 	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_hive_customers_pxf;"
 
 test-stack-clickhouse:

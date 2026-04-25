@@ -8,17 +8,11 @@
 В образ `liquibase-postgres` добавлен PostgreSQL JDBC-драйвер.
 В образ `liquibase-greenplum` добавлен PostgreSQL JDBC-драйвер.
 В образ `liquibase-clickhouse` добавлены ClickHouse JDBC-драйвер и ClickHouse extension.
-Образ Greenplum собирается локально из `greenplum/Dockerfile`: базовый образ
-`woblerr/greenplum:6.27.1` дополняется PostgreSQL JDBC-драйвером для PXF.
-Локальный образ публикуется как `${GREENPLUM_APP_IMAGE:-dwh-greenplum-gpdb}` и
-переиспользуется сервисом `pxf-examples`.
 В образ NiFi добавлены PostgreSQL и ClickHouse JDBC-драйверы.
 Для загрузки файлов в Greenplum добавлен `gpfdist`, который через
 `greenplum/start-gpfdist.sh` раздает локальную landing-зону `data/landing`.
-PXF включен в Greenplum по умолчанию и настроен на два минимальных примера:
-
-- JDBC-чтение таблицы PostgreSQL.
-- Hive-чтение таблицы из Hive Metastore через `PROFILE=Hive`.
+PXF включен в Greenplum по умолчанию и настроен на минимальный Hive-пример через
+`PROFILE=Hive`.
 
 Для AI-ассистентов и автоматизированных правок есть компактная рабочая инструкция
 `AGENTS.md`. При изменении операций, миграций, портов, credentials или тестов обновляй
@@ -34,9 +28,8 @@ docker compose up -d --build
 При запуске `postgres` сначала проходит healthcheck, затем `liquibase-postgres` выполняет
 PostgreSQL-миграции и завершается. `gpdb` после этого проходит healthcheck, затем
 `liquibase-greenplum` выполняет базовые Greenplum-миграции и завершается. `hive-metastore`
-и `hive-init` подготавливают минимальную Hive sample-таблицу. После PostgreSQL,
-Greenplum и Hive init отдельный сервис `pxf-examples` создает примерные PXF external
-tables в Greenplum. ClickHouse стартует отдельным сервисом, затем `liquibase-clickhouse`
+и `hive-init` подготавливают минимальную Hive sample-таблицу. После Greenplum и Hive init
+отдельный сервис `pxf-examples` создает Hive PXF external table в Greenplum. ClickHouse стартует отдельным сервисом, затем `liquibase-clickhouse`
 выполняет ClickHouse-миграции и завершается. NiFi стартует после успешного завершения
 трех контуров миграций.
 
@@ -50,15 +43,13 @@ docker volume rm dwh_greenplum_gpdata
 docker compose up -d --build
 ```
 
-PXF тоже инициализируется внутри Greenplum volume. При каждом старте `gpdb` конфиги из
-`greenplum/pxf/servers/` копируются в `/data/pxf/servers/`, а PostgreSQL JDBC server
-config генерируется из текущих `POSTGRES_DB`, `POSTGRES_USER` и `POSTGRES_PASSWORD`.
-После копирования конфиги синхронизируются через `pxf cluster sync`, если PXF уже был
-подготовлен. Если PXF уже запущен и ты меняешь PXF-конфиги, перезапусти `gpdb` или
-вручную выполни внутри контейнера:
+PXF тоже инициализируется внутри Greenplum volume. При каждом старте `gpdb` каталог
+`/data/pxf/servers/` пересобирается из `greenplum/pxf/servers/` и синхронизируется через
+`pxf cluster sync`, если PXF уже был подготовлен. Если PXF уже запущен и ты меняешь
+PXF-конфиги, перезапусти `gpdb` или вручную выполни внутри контейнера:
 
 ```bash
-docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && cp -R /greenplum/pxf/servers/. /data/pxf/servers/ && pxf cluster sync && pxf cluster restart'
+docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && rm -rf /data/pxf/servers && mkdir -p /data/pxf/servers && cp -R /greenplum/pxf/servers/. /data/pxf/servers/ && pxf cluster sync && pxf cluster restart'
 ```
 
 ## Управление PostgreSQL
@@ -169,26 +160,11 @@ localhost:5888
 docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && pxf cluster status'
 ```
 
-Минимальный PXF JDBC server config генерируется при старте `gpdb` в:
-
-```text
-/data/pxf/servers/postgres/jdbc-site.xml
-```
-
-Он использует PostgreSQL-параметры из `.env`:
-
-```text
-jdbc:postgresql://postgres:5432/${POSTGRES_DB:-app}
-User: ${POSTGRES_USER:-app}
-Password: ${POSTGRES_PASSWORD:-apppw}
-```
-
-Примерные PXF external tables создаются не Liquibase-миграцией, а одноразовым сервисом
+Примерная PXF external table создается не Liquibase-миграцией, а одноразовым сервисом
 `pxf-examples`, чтобы базовые Greenplum-миграции не зависели от Hive. После его успешного
-завершения в Greenplum доступны:
+завершения в Greenplum доступна:
 
 ```sql
-SELECT count(*) FROM ext.example_customers_pxf;
 SELECT count(*) FROM ext.example_hive_customers_pxf;
 ```
 
@@ -352,7 +328,6 @@ docker compose logs liquibase-postgres
 Текущий базовый слой PostgreSQL:
 
 - схема `dm` как стартовая точка для прикладных объектов промышленного стенда.
-- таблица `dm.example_customers` с маленьким набором sample-строк для проверки PXF.
 
 ## Миграции Liquibase для Greenplum
 
@@ -397,18 +372,10 @@ docker compose logs liquibase-greenplum
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
 ```
 
-Создать или пересоздать примерные PXF external tables после миграций:
+Создать или пересоздать примерную Hive PXF external table после миграций:
 
 ```bash
 docker compose run --rm pxf-examples
-```
-
-Проверить пример PXF-таблицы после `pxf-examples`:
-
-```bash
-docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \
-  -d gpdb \
-  -c 'SELECT customer_id, full_name, email, created_at FROM ext.example_customers_pxf ORDER BY customer_id;'
 ```
 
 Проверить пример Hive PXF-таблицы после `pxf-examples`:
