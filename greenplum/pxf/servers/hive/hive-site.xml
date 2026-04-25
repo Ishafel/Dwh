@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <property>
+        <name>hive.metastore.uris</name>
+        <value>thrift://hive-metastore:9083</value>
+    </property>
+    <property>
+        <name>metastore.warehouse.dir</name>
+        <value>file:///opt/hive/data/warehouse</value>
+    </property>
+    <property>
+        <name>hive.metastore.warehouse.dir</name>
+        <value>file:///opt/hive/data/warehouse</value>
+    </property>
+</configuration>
