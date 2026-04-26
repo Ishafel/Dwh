@@ -101,14 +101,6 @@ BEGIN
     FROM s_adb_as_services_csoko_stg.services_csoko_stage
     WHERE is_current = TRUE;
 
-    IF v_subscription_name IS NULL AND v_stage_name = 'dev_csoko' THEN
-        v_subscription_name := 'DEV_CSOKO_SUBSCRIPTION';
-    END IF;
-
-    IF v_stage_name = 'psi_csoko' THEN
-        v_subscription_name := 'PSI_CSOKO_SUBSCRIPTION';
-    END IF;
-
     IF v_subscription_name IS NULL THEN
         RAISE EXCEPTION 'Не найдена подписка для источника данных "%".', v_source_table;
     END IF;
@@ -124,7 +116,11 @@ BEGIN
     /*
      * Формирование строки pxf
      */
-    v_pxf_location := 'pxf://prx_' || v_subscription_name || '_' || v_source_table || '?profile=' || v_profile || '&server=' || v_pxf_connect;
+    IF v_stage_name = 'dev_csoko' THEN
+        v_pxf_location := 'pxf://' || v_subscription_name || '.' || v_source_table || '?PROFILE=' || v_profile || '&SERVER=' || v_pxf_connect;
+    ELSE
+        v_pxf_location := 'pxf://prx_' || v_subscription_name || '.' || v_source_table || '?PROFILE=' || v_profile || '&SERVER=' || v_pxf_connect;
+    END IF;
 
     /*
      * Проверка корректности заполнения колонок
@@ -167,6 +163,17 @@ BEGIN
     /*
      * Выполняем команду создания внешней таблицы
      */
+    IF EXISTS (
+        SELECT 1
+        FROM pg_class c
+        JOIN pg_namespace n ON n.oid = c.relnamespace
+        WHERE n.nspname = v_schema_name
+          AND c.relname = v_table_name
+    ) THEN
+        RAISE NOTICE 'Таблица %.% уже существует, создание пропущено.', v_schema_name, v_table_name;
+        RETURN FALSE;
+    END IF;
+
     EXECUTE FORMAT(
         'CREATE EXTERNAL' || ' TABLE %I.%I (%s) LOCATION (%L) ON ALL FORMAT %L (FORMATTER=%L) ENCODING %L;',
         v_schema_name,

@@ -93,7 +93,7 @@ test-pxf:
 	@grep -q 'thrift://hive-metastore:9083' hive/client-conf/hive-site.xml
 	@grep -q 'GREENPLUM_PXF_ENABLE' docker-compose.yml
 	@grep -q './hive/changelog:/opt/hive/changelog:ro' docker-compose.yml
-	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' liquibase-greenplum/changelog/migrations/0007-create-example-hive-customers-pxf.yaml
+	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' liquibase-greenplum/changelog/sql/0007-create-example-hive-customers-pxf.sql
 	@grep -q 'CREATE EXTERNAL TABLE demo.example_hive_customers' hive/changelog/migrations/0001-create-example-hive-customers.hql
 
 test-shell:

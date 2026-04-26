@@ -33,6 +33,24 @@ WHERE NOT EXISTS (
     WHERE is_current = TRUE
 );
 
+INSERT INTO s_adb_as_services_csoko_stg.services_csoko_smd_subscription (
+    id,
+    stage_name,
+    source_table,
+    subscription_name
+)
+SELECT
+    1,
+    'dev_csoko',
+    'example_hive_customers',
+    'demo'
+WHERE NOT EXISTS (
+    SELECT 1
+    FROM s_adb_as_services_csoko_stg.services_csoko_smd_subscription
+    WHERE stage_name = 'dev_csoko'
+      AND source_table = 'example_hive_customers'
+);
+
 COMMENT ON TABLE s_adb_as_services_csoko_stg.services_csoko_stage
 IS 'Справочник стендов и PXF-серверов для сервисных функций CSOKO.';
 
@@ -61,4 +79,4 @@ COMMENT ON COLUMN s_adb_as_services_csoko_stg.services_csoko_smd_subscription.so
 IS 'Имя исходной таблицы, полученное во входном JSON функции.';
 
 COMMENT ON COLUMN s_adb_as_services_csoko_stg.services_csoko_smd_subscription.subscription_name
-IS 'Имя подписки, используемое в имени Hive-таблицы prx_<subscription>_<source_table>.';
+IS 'Имя подписки, используемое в PXF-адресе.';
