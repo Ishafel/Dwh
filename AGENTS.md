@@ -182,20 +182,31 @@ access.
 
 ## Migration Rules
 
-- Add new PostgreSQL migrations as separate YAML files in
+- Add new PostgreSQL migrations as separate Liquibase Formatted SQL files under
   `liquibase-postgres/changelog/migrations/`.
-- Add new Greenplum migrations as separate YAML files in
+- Add new Greenplum migrations as separate Liquibase Formatted SQL files under
   `liquibase-greenplum/changelog/migrations/`.
 - Add new Hive migrations as separate `.hql` files in `hive/changelog/migrations/`.
-- Add new ClickHouse migrations as separate YAML files in
+- Add new ClickHouse migrations as separate Liquibase Formatted SQL files under
   `liquibase-clickhouse/changelog/migrations/`.
-- Keep migration filenames ordered with a numeric prefix, for example
-  `0004-create-some-table.yaml`.
+- Do not use numeric prefixes for Liquibase SQL migrations. Name each migration file
+  exactly like the object it manages, for example `f_create_external_table.sql`.
 - Do not rewrite migrations that may already have been applied unless the user explicitly
   asks for a local reset or confirms it is safe.
-- Keep `changeSet.id` values stable after a migration is introduced.
+- Keep `changeSet.id` values stable after a migration is introduced and match the
+  SQL filename without `.sql`.
 - Use `splitStatements: false` for multi-statement SQL blocks or SQL that Liquibase might
   split incorrectly.
+- For Greenplum table migrations, use `runOnChange:true` by default unless the user
+  explicitly asks not to. This includes external table migrations.
+- Greenplum external table migrations may use `DROP EXTERNAL TABLE IF EXISTS ... CASCADE`
+  before recreating the external table. Dependent views must be restored by the views
+  stage.
+- For Greenplum view migrations, use `runOnChange:true runAlways:true` by default so
+  views are recreated after table migrations that use `CASCADE`.
+- Greenplum `root.yaml` must preserve this order: schemas, extensions, functions,
+  tables, then views. If object dependencies inside one folder matter, use explicit
+  `include` entries instead of relying on `includeAll` sorting.
 - Create Greenplum tables, including PXF external tables, only through Greenplum Liquibase migrations.
 - For Greenplum tables, specify `DISTRIBUTED BY (...)` deliberately.
 - For ClickHouse tables, specify the engine explicitly, usually with `ORDER BY (...)`.

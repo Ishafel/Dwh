@@ -168,11 +168,11 @@ docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && pxf cluster st
 ```
 
 Примерная PXF external table создается Greenplum Liquibase-миграцией
-`liquibase-greenplum/changelog/migrations/0007-create-example-hive-customers-pxf.yaml`.
+`liquibase-greenplum/changelog/migrations/tables/s_adb_as_services_csoko_stg/customers_ext.sql`.
 После успешного запуска миграций и `hive-init` в Greenplum доступна:
 
 ```sql
-SELECT count(*) FROM ext.example_hive_customers_pxf;
+SELECT count(*) FROM s_adb_as_services_csoko_stg.customers_ext;
 ```
 
 ## Управление Hive Metastore
@@ -250,7 +250,7 @@ docker compose run --rm --no-deps --entrypoint /opt/hive/bin/hive hive-init \
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \
   -d gpdb \
-  -c 'SELECT customer_id, full_name, email, created_at FROM ext.example_hive_customers_pxf ORDER BY customer_id;'
+  -c 'SELECT customer_id, full_name, email, created_at FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
 ```
 
 ## Управление ClickHouse
@@ -316,11 +316,13 @@ liquibase-postgres/changelog/migrations/
 liquibase-postgres/changelog/root.yaml
 ```
 
-Добавляй новые миграции отдельными YAML-файлами в `liquibase-postgres/changelog/migrations/`.
+Добавляй новые миграции отдельными SQL-файлами в формате Liquibase Formatted SQL
+в одну из подпапок `schemas/dm`, `functions/dm`, `tables/dm` или `views/dm`.
+Порядок применения: сначала схемы, затем функции, затем таблицы и после них представления.
 Например:
 
 ```text
-0004-create-some-source-table.yaml
+liquibase-postgres/changelog/migrations/tables/dm/some_source_table.sql
 ```
 
 Накатить миграции вручную:
@@ -354,11 +356,23 @@ liquibase-greenplum/changelog/migrations/
 liquibase-greenplum/changelog/root.yaml
 ```
 
-Добавляй новые миграции отдельными YAML-файлами в `liquibase-greenplum/changelog/migrations/`.
+Добавляй новые миграции отдельными SQL-файлами в формате Liquibase Formatted SQL
+в одну из подпапок `schemas`, `extensions`, `functions`, `tables` или `views`, затем в папку нужной схемы, если категория привязана к схеме.
+Порядок применения: сначала схемы, затем расширения, затем функции, затем таблицы и после них представления.
+Файлы называются точно как объект, над которым работает миграция, без числовых префиксов.
+`changeSet.id` должен совпадать с именем файла без `.sql`.
+
+Правило для таблиц и представлений Greenplum:
+
+- для всех миграций создания таблиц по умолчанию указывай `runOnChange:true`, если явно не договорились иначе;
+- external table можно пересоздавать через `DROP EXTERNAL TABLE IF EXISTS ... CASCADE`, потому зависимые представления должны восстанавливаться после table-блока;
+- для представлений по умолчанию указывай `runOnChange:true runAlways:true`, чтобы они пересоздавались после каскадного удаления зависимостей;
+- если порядок внутри одной папки важен, фиксируй его явными `include` в `root.yaml`, а не полагайся на сортировку `includeAll`.
+
 Например:
 
 ```text
-0002-create-some-table.yaml
+liquibase-greenplum/changelog/migrations/tables/s_adb_as_services_csoko_stg/some_table.sql
 ```
 
 Накатить миграции вручную:
@@ -388,7 +402,7 @@ docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \
   -d gpdb \
-  -c 'SELECT customer_id, full_name, email, created_at FROM ext.example_hive_customers_pxf ORDER BY customer_id;'
+  -c 'SELECT customer_id, full_name, email, created_at FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
 ```
 
 ## Миграции Liquibase для ClickHouse
@@ -405,7 +419,9 @@ liquibase-clickhouse/changelog/migrations/
 liquibase-clickhouse/changelog/root.yaml
 ```
 
-Добавляй новые миграции отдельными YAML-файлами в `liquibase-clickhouse/changelog/migrations/`.
+Добавляй новые миграции отдельными SQL-файлами в формате Liquibase Formatted SQL
+в одну из подпапок `schemas/dwh`, `functions/dwh`, `tables/dwh` или `views/dwh`.
+Порядок применения: сначала схемы, затем функции, затем таблицы и после них представления.
 Для таблиц ClickHouse указывай движок явно, например `ENGINE = MergeTree ORDER BY (...)`.
 
 Накатить миграции ClickHouse вручную:
@@ -517,21 +533,22 @@ gpfdist://gpfdist:8081/<folder>/*.csv
 data/landing/example_customers/sample_customers.csv
 ```
 
-Liquibase создает схемы `ext` и `stg`, external table `ext.example_customers_raw`
-и внутреннюю staging-таблицу `stg.example_customers`.
+Liquibase создает external table `s_adb_as_services_csoko_stg.example_customers_ext`,
+ODS-таблицу `s_adb_as_services_csoko_ods.example_customers` и view
+`s_adb_as_services_csoko_ods.v_src_example_customers` для загрузочного слоя.
 
 Проверить чтение external table:
 
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb \
-  -c "SELECT * FROM ext.example_customers_raw;"
+  -c "SELECT * FROM s_adb_as_services_csoko_stg.example_customers_ext;"
 ```
 
 Загрузить пример во внутреннюю staging-таблицу:
 
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb \
-  -c "TRUNCATE stg.example_customers; INSERT INTO stg.example_customers SELECT customer_id::bigint, full_name, email, created_at::timestamp FROM ext.example_customers_raw;"
+  -c "TRUNCATE s_adb_as_services_csoko_ods.example_customers; INSERT INTO s_adb_as_services_csoko_ods.example_customers SELECT customer_id, full_name, email, created_at FROM s_adb_as_services_csoko_ods.v_src_example_customers;"
 ```
 
 Для NiFi каталог доступен внутри контейнера как:
