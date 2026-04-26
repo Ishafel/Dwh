@@ -1,4 +1,21 @@
 databaseChangeLog:
   - includeAll:
-      path: migrations
+      path: migrations/schemas
       relativeToChangelogFile: true
+      endsWithFilter: .sql
+      errorIfMissingOrEmpty: false
+  - includeAll:
+      path: migrations/functions
+      relativeToChangelogFile: true
+      endsWithFilter: .sql
+      errorIfMissingOrEmpty: false
+  - includeAll:
+      path: migrations/tables
+      relativeToChangelogFile: true
+      endsWithFilter: .sql
+      errorIfMissingOrEmpty: false
+  - includeAll:
+      path: migrations/views
+      relativeToChangelogFile: true
+      endsWithFilter: .sql
+      errorIfMissingOrEmpty: false

@@ -42,28 +42,29 @@ test-migrations:
 		grep -q 'relativeToChangelogFile: true' "$${root}"; \
 	done; \
 	for dir in liquibase-postgres/changelog/migrations liquibase-greenplum/changelog/migrations liquibase-clickhouse/changelog/migrations; do \
-		for file in "$${dir}"/*.yaml; do \
-			base="$$(basename "$${file}" .yaml)"; \
-			[[ "$${base}" =~ ^[0-9]{4}-[a-z0-9-]+$$ ]] || { echo "Bad migration filename: $${file}"; exit 1; }; \
-			id="$$(grep -m1 -E '^[[:space:]]+id:' "$${file}" | sed -E 's/^[[:space:]]+id:[[:space:]]*//')"; \
+		while IFS= read -r file; do \
+			base="$$(basename "$${file}" .sql)"; \
+			[[ "$${base}" =~ ^[a-z][a-z0-9_]*$$ ]] || { echo "Bad migration filename: $${file}"; exit 1; }; \
+			grep -q '^--liquibase formatted sql$$' "$${file}" || { echo "Missing Liquibase SQL header in $${file}"; exit 1; }; \
+			id="$$(sed -nE 's/^--changeset[[:space:]]+[^:]+:([^[:space:]]+).*/\1/p' "$${file}" | head -n1)"; \
 			[ "$${id}" = "$${base}" ] || { echo "changeSet.id must match filename in $${file}"; exit 1; }; \
-		done; \
+		done < <(find "$${dir}" -type f -name '*.sql' | sort); \
 	done; \
 	for file in hive/changelog/migrations/*.hql; do \
 		base="$$(basename "$${file}" .hql)"; \
 		[[ "$${base}" =~ ^[0-9]{4}-[a-z0-9-]+$$ ]] || { echo "Bad Hive migration filename: $${file}"; exit 1; }; \
 	done; \
-	for file in liquibase-greenplum/changelog/migrations/*.yaml; do \
+	while IFS= read -r file; do \
 		if grep -qiE '\bCREATE[[:space:]]+TABLE\b' "$${file}"; then \
 			grep -qi 'DISTRIBUTED BY' "$${file}" || { echo "Missing DISTRIBUTED BY in $${file}"; exit 1; }; \
 		fi; \
-	done; \
-	for file in liquibase-clickhouse/changelog/migrations/*.yaml; do \
+	done < <(find liquibase-greenplum/changelog/migrations -type f -name '*.sql' | sort); \
+	while IFS= read -r file; do \
 		if grep -qi 'CREATE TABLE' "$${file}"; then \
 			grep -qi 'ENGINE =' "$${file}" || { echo "Missing ENGINE in $${file}"; exit 1; }; \
 			grep -qi 'ORDER BY' "$${file}" || { echo "Missing ORDER BY in $${file}"; exit 1; }; \
 		fi; \
-	done
+	done < <(find liquibase-clickhouse/changelog/migrations -type f -name '*.sql' | sort)
 
 test-landing:
 	@echo "==> Check gpfdist landing samples"
@@ -93,7 +94,8 @@ test-pxf:
 	@grep -q 'thrift://hive-metastore:9083' hive/client-conf/hive-site.xml
 	@grep -q 'GREENPLUM_PXF_ENABLE' docker-compose.yml
 	@grep -q './hive/changelog:/opt/hive/changelog:ro' docker-compose.yml
-	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' liquibase-greenplum/changelog/sql/0007-create-example-hive-customers-pxf.sql
+	@grep -q '"schema_name": "s_adb_as_services_csoko_stg"' liquibase-greenplum/changelog/migrations/tables/s_adb_as_services_csoko_stg/customers_ext.sql
+	@grep -q '"source_table": "example_hive_customers"' liquibase-greenplum/changelog/migrations/tables/s_adb_as_services_csoko_stg/customers_ext.sql
 	@grep -q 'CREATE EXTERNAL TABLE demo.example_hive_customers' hive/changelog/migrations/0001-create-example-hive-customers.hql
 
 test-shell:
@@ -120,8 +122,8 @@ test-stack-hive:
 test-stack-greenplum:
 	@echo "==> Check live Greenplum"
 	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT 1;"
-	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_customers_raw;"
-	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM ext.example_hive_customers_pxf;"
+	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM s_adb_as_services_csoko_stg.example_customers_ext;"
+	@docker compose exec -T -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d "$(GREENPLUM_DATABASE_NAME)" -Atc "SELECT count(*) FROM s_adb_as_services_csoko_stg.customers_ext;"
 
 test-stack-clickhouse:
 	@echo "==> Check live ClickHouse"
