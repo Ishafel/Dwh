@@ -1,9 +1,0 @@
-databaseChangeLog:
-  - changeSet:
-      id: 0007-create-example-hive-customers-pxf
-      author: codex
-      changes:
-        - sqlFile:
-            path: ../sql/0007-create-example-hive-customers-pxf.sql
-            relativeToChangelogFile: true
-            splitStatements: false

@@ -1,9 +1,0 @@
-databaseChangeLog:
-  - changeSet:
-      id: 0002-create-landing-schemas
-      author: codex
-      changes:
-        - sql:
-            sql: CREATE SCHEMA IF NOT EXISTS ext;
-        - sql:
-            sql: CREATE SCHEMA IF NOT EXISTS stg;
