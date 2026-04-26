@@ -1,0 +1,9 @@
+databaseChangeLog:
+  - changeSet:
+      id: 0004-create-f-create-external-table-function
+      author: codex
+      changes:
+        - sqlFile:
+            path: ../sql/0008-create-f-create-external-table-function.sql
+            relativeToChangelogFile: true
+            splitStatements: false
