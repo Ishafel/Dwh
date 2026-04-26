@@ -1,9 +1,9 @@
 databaseChangeLog:
   - changeSet:
-      id: 0007-create-example-hive-customers-pxf
+      id: 0009-create-table-customers-ext
       author: codex
       changes:
         - sqlFile:
-            path: ../sql/0007-create-example-hive-customers-pxf.sql
+            path: ../sql/0009-create-table-customers-ext.sql
             relativeToChangelogFile: true
             splitStatements: false
