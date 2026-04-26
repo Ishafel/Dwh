@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset codex:etl_run splitStatements:false
+--changeset codex:etl_run runOnChange:true splitStatements:false
 CREATE TABLE IF NOT EXISTS s_adb_as_services_csoko_stg.etl_run (
     run_id uuid NOT NULL,
     function_name text NOT NULL,

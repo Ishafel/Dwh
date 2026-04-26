@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset codex:services_csoko_smd_subscription splitStatements:false
+--changeset codex:services_csoko_smd_subscription runOnChange:true splitStatements:false
 CREATE TABLE IF NOT EXISTS s_adb_as_services_csoko_stg.services_csoko_smd_subscription (
     id bigint,
     stage_name text,

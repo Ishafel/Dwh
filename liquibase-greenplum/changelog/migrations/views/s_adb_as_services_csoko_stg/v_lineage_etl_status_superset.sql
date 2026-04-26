@@ -1,6 +1,6 @@
 --liquibase formatted sql
 
---changeset codex:v_lineage_etl_status_superset splitStatements:false
+--changeset codex:v_lineage_etl_status_superset runOnChange:true runAlways:true splitStatements:false
 DROP VIEW IF EXISTS s_adb_as_services_csoko_stg.v_lineage_etl_status_superset;
 
 CREATE VIEW s_adb_as_services_csoko_stg.v_lineage_etl_status_superset AS
