@@ -78,6 +78,7 @@ services:
     volumes:
       - hive_warehouse:/opt/hive/data/warehouse
       - ./hive/client-conf:/opt/hive/client-conf:ro
+      - ./hive/changelog:/opt/hive/changelog:ro
       - ./hive/init-example.sh:/opt/hive/bin/init-example-local.sh:ro
     entrypoint: ["/opt/hive/bin/init-example-local.sh"]
 
@@ -112,6 +113,8 @@ services:
       liquibase-greenplum:
         condition: service_completed_successfully
       liquibase-clickhouse:
+        condition: service_completed_successfully
+      hive-init:
         condition: service_completed_successfully
     ports:
       - "${NIFI_PORT:-8443}:8443"
@@ -218,20 +221,6 @@ services:
       - --log-level=${GREENPLUM_LIQUIBASE_LOG_LEVEL:-info}
       - update
 
-  pxf-examples:
-    image: woblerr/greenplum:${GREENPLUM_VERSION:-6.27.1}
-    depends_on:
-      liquibase-greenplum:
-        condition: service_completed_successfully
-      hive-init:
-        condition: service_completed_successfully
-    environment:
-      GREENPLUM_HOST: gpdb
-      GREENPLUM_DATABASE_NAME: ${GREENPLUM_DATABASE_NAME:-gpdb}
-      PGPASSWORD: ${GREENPLUM_PASSWORD:-gpadminpw}
-    volumes:
-      - ./greenplum/create-pxf-example-tables.sh:/greenplum/create-pxf-example-tables.sh:ro
-    command: ["/greenplum/create-pxf-example-tables.sh"]
 networks:
   default:
     name: dwh-greenplum

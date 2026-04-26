@@ -27,9 +27,9 @@ docker compose up -d --build
 
 При запуске `postgres` сначала проходит healthcheck, затем `liquibase-postgres` выполняет
 PostgreSQL-миграции и завершается. `gpdb` после этого проходит healthcheck, затем
-`liquibase-greenplum` выполняет базовые Greenplum-миграции и завершается. `hive-metastore`
-и `hive-init` подготавливают минимальную Hive sample-таблицу. После Greenplum и Hive init
-отдельный сервис `pxf-examples` создает Hive PXF external table в Greenplum. ClickHouse стартует отдельным сервисом, затем `liquibase-clickhouse`
+`liquibase-greenplum` выполняет Greenplum-миграции, включая PXF external tables, и завершается.
+`hive-metastore` и `hive-init` подготавливают минимальную Hive sample-таблицу через
+упорядоченные `.hql`-миграции из `hive/changelog/migrations/`. ClickHouse стартует отдельным сервисом, затем `liquibase-clickhouse`
 выполняет ClickHouse-миграции и завершается. NiFi стартует после успешного завершения
 трех контуров миграций.
 
@@ -167,9 +167,9 @@ localhost:5888
 docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && pxf cluster status'
 ```
 
-Примерная PXF external table создается не Liquibase-миграцией, а одноразовым сервисом
-`pxf-examples`, чтобы базовые Greenplum-миграции не зависели от Hive. После его успешного
-завершения в Greenplum доступна:
+Примерная PXF external table создается Greenplum Liquibase-миграцией
+`liquibase-greenplum/changelog/migrations/0007-create-example-hive-customers-pxf.yaml`.
+После успешного запуска миграций и `hive-init` в Greenplum доступна:
 
 ```sql
 SELECT count(*) FROM ext.example_hive_customers_pxf;
@@ -180,10 +180,8 @@ SELECT count(*) FROM ext.example_hive_customers_pxf;
 Минимальный Hive-контур состоит из:
 
 - `hive-metastore` - Hive Metastore 3.1.3 с embedded Derby metadata DB.
-- `hive-init` - одноразовый init-контейнер, который создает sample-таблицу
-  `demo.example_hive_customers`.
-- `pxf-examples` - одноразовый контейнер, который создает Greenplum PXF external tables
-  после базовых миграций и Hive init.
+- `hive-init` - одноразовый init-контейнер, который готовит sample-файл и применяет
+  Hive `.hql`-миграции из `hive/changelog/migrations/`.
 - `hive_warehouse` - общий Docker volume с файлами Hive table, смонтированный в
   `hive-init`, `hive-metastore` и `gpdb`.
 
@@ -220,16 +218,22 @@ hive/client-conf/hive-site.xml
 hive/init-example.sh
 ```
 
+Hive migrations:
+
+```text
+hive/changelog/migrations/
+```
+
 PXF Hive server config:
 
 ```text
 greenplum/pxf/servers/hive/
 ```
 
-Скрипт создания PXF external tables:
+Greenplum PXF external tables создаются через Liquibase migrations:
 
 ```text
-greenplum/create-pxf-example-tables.sh
+liquibase-greenplum/changelog/migrations/
 ```
 
 Проверить таблицу через Hive CLI:
@@ -379,13 +383,7 @@ docker compose logs liquibase-greenplum
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
 ```
 
-Создать или пересоздать примерную Hive PXF external table после миграций:
-
-```bash
-docker compose run --rm pxf-examples
-```
-
-Проверить пример Hive PXF-таблицы после `pxf-examples`:
+Проверить пример Hive PXF-таблицы после Greenplum Liquibase-миграций и `hive-init`:
 
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \

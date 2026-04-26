@@ -5,6 +5,8 @@ export HIVE_CONF_DIR=/opt/hive/client-conf
 export HADOOP_CLIENT_OPTS="${HADOOP_CLIENT_OPTS:-} -Xmx512m"
 
 warehouse_dir=/opt/hive/data/warehouse/example_hive_customers
+changelog_dir=/opt/hive/changelog/migrations
+
 mkdir -p "${warehouse_dir}"
 
 cat > "${warehouse_dir}/data.csv" <<'CSV'
@@ -15,17 +17,19 @@ CSV
 
 chown -R hive:hive /opt/hive/data/warehouse
 
-/opt/hive/bin/hive --skiphadoopversion --skiphbasecp -e "
-  CREATE DATABASE IF NOT EXISTS demo;
-  DROP TABLE IF EXISTS demo.example_hive_customers;
-  CREATE EXTERNAL TABLE demo.example_hive_customers (
-    customer_id BIGINT,
-    full_name STRING,
-    email STRING,
-    created_at STRING
-  )
-  ROW FORMAT DELIMITED
-  FIELDS TERMINATED BY ','
-  STORED AS TEXTFILE
-  LOCATION 'file:///opt/hive/data/warehouse/example_hive_customers';
-"
+if [ ! -d "${changelog_dir}" ]; then
+    echo "Hive changelog directory does not exist: ${changelog_dir}" >&2
+    exit 1
+fi
+
+mapfile -t migrations < <(find "${changelog_dir}" -maxdepth 1 -type f -name '*.hql' | sort)
+
+if [ "${#migrations[@]}" -eq 0 ]; then
+    echo "No Hive migrations found in ${changelog_dir}" >&2
+    exit 1
+fi
+
+for migration in "${migrations[@]}"; do
+    echo "Applying Hive migration: ${migration}"
+    /opt/hive/bin/hive --skiphadoopversion --skiphbasecp -f "${migration}"
+done
