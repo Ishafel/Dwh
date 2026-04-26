@@ -24,12 +24,12 @@ or manual commands. Keep this file as the compact working guide.
 - `docker-compose.yml` - service graph for PostgreSQL, Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
 - `greenplum/init-4-segments.sh` - single-node Greenplum initialization with 4 primary segments.
 - `greenplum/start-gpfdist.sh` - starts gpfdist for local landing-zone files.
-- `greenplum/create-pxf-example-tables.sh` - creates sample Greenplum PXF external tables after base migrations.
 - `greenplum/pxf/servers/hive/` - PXF Hive server config for the local Hive Metastore.
 - `hive/conf/hive-site.xml` - server-side Hive Metastore config with embedded Derby.
 - `hive/client-conf/hive-site.xml` - client-side Hive config for `hive-init`.
 - `hive/start-metastore.sh` - starts Hive Metastore and initializes embedded Derby if needed.
-- `hive/init-example.sh` - creates the minimal Hive sample table and data files.
+- `hive/init-example.sh` - creates minimal Hive sample data files and applies Hive migrations.
+- `hive/changelog/migrations/` - ordered Hive `.hql` migrations.
 - `liquibase-postgres/` - PostgreSQL Liquibase image and changelog.
 - `liquibase-postgres/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
 - `liquibase-postgres/changelog/migrations/` - PostgreSQL migrations.
@@ -59,13 +59,10 @@ Greenplum migrations currently create:
 - `ext.example_customers_raw` reading CSV files from
   `gpfdist://gpfdist:8081/example_customers/*.csv`.
 - `stg.example_customers` distributed by `customer_id`.
-
-The `pxf-examples` service currently creates:
-
 - `ext.example_hive_customers_pxf` reading Hive `demo.example_hive_customers` through
   `pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive`.
 
-Hive init currently creates:
+Hive migrations currently create:
 
 - `demo.example_hive_customers` external text table over files in `/opt/hive/data/warehouse/example_hive_customers`.
 
@@ -99,12 +96,6 @@ Run Greenplum migrations manually:
 ```bash
 docker compose build liquibase-greenplum
 docker compose run --rm liquibase-greenplum
-```
-
-Create or refresh sample PXF external tables manually:
-
-```bash
-docker compose run --rm pxf-examples
 ```
 
 Run ClickHouse migrations manually:
@@ -177,8 +168,8 @@ For schema or stack changes, also validate with the smallest relevant Docker Com
 
 - For PostgreSQL migration changes, build and run `liquibase-postgres`.
 - For Greenplum migration changes, build and run `liquibase-greenplum`.
-- For PXF changes, start the stack, run `pxf cluster status`, run `pxf-examples`, and
-  query `ext.example_hive_customers_pxf`.
+- For PXF changes, start the stack, run `pxf cluster status`, run Greenplum migrations,
+  run `hive-init`, and query `ext.example_hive_customers_pxf`.
 - For Hive PXF changes, also start `hive-metastore`, run `hive-init`, and verify
   `demo.example_hive_customers`.
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.
@@ -195,6 +186,7 @@ access.
   `liquibase-postgres/changelog/migrations/`.
 - Add new Greenplum migrations as separate YAML files in
   `liquibase-greenplum/changelog/migrations/`.
+- Add new Hive migrations as separate `.hql` files in `hive/changelog/migrations/`.
 - Add new ClickHouse migrations as separate YAML files in
   `liquibase-clickhouse/changelog/migrations/`.
 - Keep migration filenames ordered with a numeric prefix, for example
@@ -204,6 +196,7 @@ access.
 - Keep `changeSet.id` values stable after a migration is introduced.
 - Use `splitStatements: false` for multi-statement SQL blocks or SQL that Liquibase might
   split incorrectly.
+- Create Greenplum tables, including PXF external tables, only through Greenplum Liquibase migrations.
 - For Greenplum tables, specify `DISTRIBUTED BY (...)` deliberately.
 - For ClickHouse tables, specify the engine explicitly, usually with `ORDER BY (...)`.
 

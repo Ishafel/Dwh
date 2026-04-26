@@ -49,6 +49,10 @@ test-migrations:
 			[ "$${id}" = "$${base}" ] || { echo "changeSet.id must match filename in $${file}"; exit 1; }; \
 		done; \
 	done; \
+	for file in hive/changelog/migrations/*.hql; do \
+		base="$$(basename "$${file}" .hql)"; \
+		[[ "$${base}" =~ ^[0-9]{4}-[a-z0-9-]+$$ ]] || { echo "Bad Hive migration filename: $${file}"; exit 1; }; \
+	done; \
 	for file in liquibase-greenplum/changelog/migrations/*.yaml; do \
 		if grep -qiE '\bCREATE[[:space:]]+TABLE\b' "$${file}"; then \
 			grep -qi 'DISTRIBUTED BY' "$${file}" || { echo "Missing DISTRIBUTED BY in $${file}"; exit 1; }; \
@@ -79,24 +83,23 @@ test-pxf:
 	@test -f greenplum/pxf/servers/hive/core-site.xml
 	@test -f hive/conf/hive-site.xml
 	@test -f hive/client-conf/hive-site.xml
+	@test -f hive/changelog/migrations/0001-create-example-hive-customers.hql
 	@test -x greenplum/start-gpfdist.sh
 	@test -x hive/start-metastore.sh
 	@test -x hive/init-example.sh
-	@test -x greenplum/create-pxf-example-tables.sh
 	@grep -q 'is_pxf_base_only_servers' greenplum/init-4-segments.sh
 	@grep -q 'sync_pxf_server_configs_after_prepare' greenplum/init-4-segments.sh
 	@grep -q 'thrift://hive-metastore:9083' greenplum/pxf/servers/hive/hive-site.xml
 	@grep -q 'thrift://hive-metastore:9083' hive/client-conf/hive-site.xml
 	@grep -q 'GREENPLUM_PXF_ENABLE' docker-compose.yml
-	@grep -q 'pxf-examples:' docker-compose.yml
-	@grep -q 'db_host="$${GREENPLUM_HOST:-gpdb}"' greenplum/create-pxf-example-tables.sh
-	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' greenplum/create-pxf-example-tables.sh
+	@grep -q './hive/changelog:/opt/hive/changelog:ro' docker-compose.yml
+	@grep -q 'pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive' liquibase-greenplum/changelog/migrations/0007-create-example-hive-customers-pxf.yaml
+	@grep -q 'CREATE EXTERNAL TABLE demo.example_hive_customers' hive/changelog/migrations/0001-create-example-hive-customers.hql
 
 test-shell:
 	@echo "==> Check shell entrypoints are executable"
 	@test -x greenplum/init-4-segments.sh
 	@test -x greenplum/start-gpfdist.sh
-	@test -x greenplum/create-pxf-example-tables.sh
 	@test -x hive/start-metastore.sh
 	@test -x hive/init-example.sh
 	@test -x scripts/deploy.sh
