@@ -31,6 +31,11 @@ SELECT s_adb_as_services_csoko_stg.f_create_external_table(
           "name": "created_at",
           "type": "text",
           "description": "Дата и время создания записи"
+        },
+        {
+          "name": "ctl_loading",
+          "type": "int8",
+          "description": "Технический идентификатор партии загрузки"
         }
       ]
     }

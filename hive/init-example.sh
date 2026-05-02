@@ -10,9 +10,9 @@ changelog_dir=/opt/hive/changelog/migrations
 mkdir -p "${warehouse_dir}"
 
 cat > "${warehouse_dir}/data.csv" <<'CSV'
-1,Alice Ivanova,alice@example.com,2026-01-10 09:30:00
-2,Boris Petrov,boris@example.com,2026-01-11 14:15:00
-3,Clara Smirnova,clara@example.com,2026-01-12 18:45:00
+1,Alice Ivanova,alice@example.com,2026-01-10 09:30:00,2026050201
+2,Boris Petrov,boris@example.com,2026-01-11 14:15:00,2026050201
+3,Clara Smirnova,clara@example.com,2026-01-12 18:45:00,2026050202
 CSV
 
 chown -R hive:hive /opt/hive/data/warehouse

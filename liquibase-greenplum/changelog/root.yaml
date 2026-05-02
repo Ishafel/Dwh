@@ -18,6 +18,9 @@ databaseChangeLog:
       file: migrations/tables/s_adb_as_services_csoko_stg/etl_run.sql
       relativeToChangelogFile: true
   - include:
+      file: migrations/tables/s_adb_as_services_csoko_stg/view_lineage.sql
+      relativeToChangelogFile: true
+  - include:
       file: migrations/tables/s_adb_as_services_csoko_stg/services_csoko_smd_subscription.sql
       relativeToChangelogFile: true
   - include:

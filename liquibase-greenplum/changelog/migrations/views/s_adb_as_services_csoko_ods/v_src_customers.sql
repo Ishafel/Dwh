@@ -6,7 +6,8 @@ SELECT
     customer_id,
     full_name,
     email,
-    created_at
+    created_at,
+    ctl_loading
 FROM s_adb_as_services_csoko_stg.customers_ext;
 
 COMMENT ON VIEW s_adb_as_services_csoko_ods.v_src_customers
