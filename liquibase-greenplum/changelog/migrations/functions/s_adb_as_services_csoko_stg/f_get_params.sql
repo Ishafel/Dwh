@@ -20,6 +20,11 @@ DECLARE
     val text;
     i int;
 BEGIN
+    /*
+     * Функция возвращает список колонок через запятую с безопасным quoting.
+     * Источником может быть таблица, представление, external table или
+     * set-returning function. Флаг is_func показывает, что источник найден как функция.
+     */
     is_func := false;
     v_input_schema := btrim(p_schema_src);
     v_source_name := btrim(p_table_src);
@@ -32,6 +37,11 @@ BEGIN
         RAISE EXCEPTION 'Source object is not specified.';
     END IF;
 
+    /*
+     * Сохраняем исходное имя объекта для диагностики, но для поиска убираем
+     * сигнатуру. Перегруженные функции пока отклоняем явно, пока не появится
+     * точный разбор типов аргументов через pg_proc.
+     */
     v_signature := substring(v_source_name FROM '\((.*)\)');
     v_source_name := regexp_replace(v_source_name, '\(.*\)', '');
     v_input_name := v_source_name;
@@ -40,6 +50,10 @@ BEGIN
         RAISE EXCEPTION 'Function signatures are not supported by f_get_params yet: %.%', v_input_schema, p_table_src;
     END IF;
 
+    /*
+     * Читаем pg_catalog напрямую вместо парсинга format_type(...). Так схема
+     * и имя возвращаемого composite-типа остаются стабильными для SETOF.
+     */
     SELECT
         p.proretset,
         rtn.nspname,
@@ -73,6 +87,10 @@ BEGIN
 
     IF v_proretset THEN
         IF v_return_name = 'record' THEN
+            /*
+             * RETURNS TABLE(...) и OUT/INOUT-параметры хранятся как record
+             * с именованными выходными аргументами. Эти имена и есть колонки источника.
+             */
             IF v_proargmodes IS NULL OR v_proargnames IS NULL THEN
                 RAISE EXCEPTION 'Function %.% returns record without named OUT columns.', v_input_schema, v_source_name;
             END IF;
@@ -96,6 +114,10 @@ BEGIN
             RETURN NEXT;
             RETURN;
         ELSE
+            /*
+             * SETOF some_composite_type: находим возвращаемую relation через
+             * метаданные pg_type, затем читаем ее колонки как у обычной таблицы/view.
+             */
             p_schema_src := v_return_schema;
             v_source_name := v_return_name;
         END IF;
@@ -103,6 +125,10 @@ BEGIN
         RAISE EXCEPTION 'Function %.% does not return a set.', v_input_schema, v_source_name;
     END IF;
 
+    /*
+     * Путь для relation: таблица, view, external table или composite relation,
+     * найденная по возвращаемому типу SETOF-функции.
+     */
     SELECT string_agg(quote_ident(s.column_name), ', ' ORDER BY s.ordinal_position)
       INTO params
       FROM information_schema.columns s
