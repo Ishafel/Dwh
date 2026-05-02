@@ -6,7 +6,8 @@ CREATE EXTERNAL TABLE demo.example_hive_customers (
     customer_id BIGINT,
     full_name STRING,
     email STRING,
-    created_at STRING
+    created_at STRING,
+    ctl_loading BIGINT
 )
 ROW FORMAT DELIMITED
 FIELDS TERMINATED BY ','
