@@ -250,7 +250,7 @@ docker compose run --rm --no-deps --entrypoint /opt/hive/bin/hive hive-init \
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \
   -d gpdb \
-  -c 'SELECT customer_id, full_name, email, created_at FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
+  -c 'SELECT customer_id, full_name, email, created_at, ctl_loading FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
 ```
 
 ## Управление ClickHouse
@@ -402,7 +402,7 @@ docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb
 ```bash
 docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql \
   -d gpdb \
-  -c 'SELECT customer_id, full_name, email, created_at FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
+  -c 'SELECT customer_id, full_name, email, created_at, ctl_loading FROM s_adb_as_services_csoko_stg.customers_ext ORDER BY customer_id;'
 ```
 
 ## Миграции Liquibase для ClickHouse
