@@ -1,7 +1,9 @@
 --liquibase formatted sql
 
 --changeset codex:example_customers runOnChange:true splitStatements:false
-CREATE TABLE IF NOT EXISTS s_adb_as_services_csoko_ods.example_customers (
+DROP TABLE IF EXISTS s_adb_as_services_csoko_ods.example_customers CASCADE;
+
+CREATE TABLE s_adb_as_services_csoko_ods.example_customers (
     customer_id text,
     full_name text,
     email text,
