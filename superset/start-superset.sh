@@ -3,7 +3,7 @@ set -euo pipefail
 
 superset db upgrade
 
-if ! superset fab list-users | awk '{print $2}' | grep -qx "${SUPERSET_ADMIN_USERNAME:-admin}"; then
+if ! superset fab list-users | sed -nE 's/^username:([^[:space:]|]+).*/\1/p' | grep -qx "${SUPERSET_ADMIN_USERNAME:-admin}"; then
     superset fab create-admin \
         --username "${SUPERSET_ADMIN_USERNAME:-admin}" \
         --firstname "${SUPERSET_ADMIN_FIRSTNAME:-DWH}" \
