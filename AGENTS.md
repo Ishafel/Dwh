@@ -34,7 +34,9 @@ or manual commands. Keep this file as the compact working guide.
 - `liquibase-postgres/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
 - `liquibase-postgres/changelog/migrations/` - PostgreSQL migrations.
 - `liquibase-greenplum/` - Greenplum Liquibase image and changelog.
-- `liquibase-greenplum/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
+- `liquibase-greenplum/changelog/root.yaml` - root changelog that applies schemas,
+  extensions, functions, explicit dependency-sensitive tables, the remaining tables,
+  and then views.
 - `liquibase-greenplum/changelog/migrations/` - Greenplum migrations.
 - `liquibase-clickhouse/` - ClickHouse Liquibase image and changelog.
 - `liquibase-clickhouse/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
@@ -53,14 +55,24 @@ PostgreSQL migrations currently create:
 
 Greenplum migrations currently create:
 
-- `dwh` schema.
-- `ext` schema for external tables.
-- `stg` schema for staging tables.
-- `ext.example_customers_raw` reading CSV files from
+- business schemas:
+  `s_adb_as_services_csoko_dds`,
+  `s_adb_as_services_csoko_df`,
+  `s_adb_as_services_csoko_dm`,
+  `s_adb_as_services_csoko_navigator`,
+  `s_adb_as_services_csoko_ods`,
+  `s_adb_as_services_csoko_stg`,
+  `s_adb_as_services_csoko_udlapprove`,
+  `s_adb_as_services_csoko_udlprod`,
+  `s_adb_as_services_csoko_view`.
+- `s_adb_as_services_csoko_stg.example_customers_ext` reading CSV files from
   `gpfdist://gpfdist:8081/example_customers/*.csv`.
-- `stg.example_customers` distributed by `customer_id`.
-- `ext.example_hive_customers_pxf` reading Hive `demo.example_hive_customers` through
+- `s_adb_as_services_csoko_ods.example_customers` distributed by `customer_id`.
+- `s_adb_as_services_csoko_stg.customers_ext` reading Hive `demo.example_hive_customers` through
   `pxf://demo.example_hive_customers?PROFILE=Hive&SERVER=hive`.
+- `s_adb_as_services_csoko_ods.customers` distributed by `customer_id`.
+- operational/helper objects in `s_adb_as_services_csoko_stg`, including ETL run,
+  lineage, subscription metadata, refresh functions, and source views.
 
 Hive migrations currently create:
 
@@ -126,7 +138,7 @@ docker compose exec -u gpadmin gpdb bash -lc 'source ~/.bashrc && pxf cluster st
 Check Hive sample through Greenplum PXF:
 
 ```bash
-docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb -Atc "SELECT count(*) FROM ext.example_hive_customers_pxf;"
+docker compose exec -u gpadmin gpdb /usr/local/greenplum-db/bin/psql -d gpdb -Atc "SELECT count(*) FROM s_adb_as_services_csoko_stg.customers_ext;"
 ```
 
 Open ClickHouse client inside the container:
@@ -169,7 +181,7 @@ For schema or stack changes, also validate with the smallest relevant Docker Com
 - For PostgreSQL migration changes, build and run `liquibase-postgres`.
 - For Greenplum migration changes, build and run `liquibase-greenplum`.
 - For PXF changes, start the stack, run `pxf cluster status`, run Greenplum migrations,
-  run `hive-init`, and query `ext.example_hive_customers_pxf`.
+  run `hive-init`, and query `s_adb_as_services_csoko_stg.customers_ext`.
 - For Hive PXF changes, also start `hive-metastore`, run `hive-init`, and verify
   `demo.example_hive_customers`.
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.
@@ -290,7 +302,7 @@ The workflow expects a self-hosted Linux runner with label `dwh-greenplum` and r
 
 The deploy script refuses to continue if tracked local changes exist in `APP_DIR`.
 It uses `git pull --ff-only origin main`, then `docker compose up -d --build`, then
-checks service status, row counts for PostgreSQL, Greenplum, and ClickHouse, and NiFi health.
+checks service status and NiFi health.
 
 ## Dangerous Areas
 
