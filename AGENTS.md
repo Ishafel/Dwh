@@ -9,6 +9,7 @@ This repository contains a local DWH stack built with Docker Compose:
 - Hive Metastore 3.1.3 for the minimal Hive/PXF contour.
 - Apache NiFi 2.8.0 for data flows.
 - ClickHouse for analytical/event-style storage.
+- Apache Superset for BI and SQL exploration.
 - Liquibase containers for PostgreSQL, Greenplum, and ClickHouse schema migrations.
 - `gpfdist` for serving local landing-zone files to Greenplum external tables.
 - PXF inside the Greenplum container for Hive external tables.
@@ -21,7 +22,7 @@ or manual commands. Keep this file as the compact working guide.
 - `.github/workflows/deploy.yml` - GitHub Actions deployment workflow for `main`.
 - `.github/workflows/tests.yml` - fast Makefile checks for PRs and `main`.
 - `.env.example` - documented local defaults for ports, credentials, versions, and JVM sizing.
-- `docker-compose.yml` - service graph for PostgreSQL, Greenplum, gpfdist, NiFi, ClickHouse, and Liquibase.
+- `docker-compose.yml` - service graph for PostgreSQL, Greenplum, gpfdist, NiFi, ClickHouse, Superset, and Liquibase.
 - `greenplum/init-4-segments.sh` - single-node Greenplum initialization with 4 primary segments.
 - `greenplum/start-gpfdist.sh` - starts gpfdist for local landing-zone files.
 - `greenplum/pxf/servers/hive/` - PXF Hive server config for the local Hive Metastore.
@@ -42,6 +43,9 @@ or manual commands. Keep this file as the compact working guide.
 - `liquibase-clickhouse/changelog/root.yaml` - root changelog using `includeAll` over `migrations/`.
 - `liquibase-clickhouse/changelog/migrations/` - ClickHouse migrations.
 - `nifi/Dockerfile` - NiFi image with PostgreSQL and ClickHouse JDBC drivers.
+- `superset/Dockerfile` - Superset image with PostgreSQL/Greenplum and ClickHouse Python drivers.
+- `superset/superset_config.py` - Superset local configuration.
+- `superset/start-superset.sh` - initializes Superset metadata and starts the web server.
 - `data/landing/` - local landing-zone files served by `gpfdist`.
 - `Makefile` - local fast checks exposed through `make test`.
 - `scripts/test.sh` - compatibility wrapper around `make test`.
@@ -147,6 +151,12 @@ Open ClickHouse client inside the container:
 docker compose exec clickhouse clickhouse-client --user dwh --password dwhpw --database dwh
 ```
 
+Open Superset:
+
+```text
+http://localhost:8088
+```
+
 Check service status and logs:
 
 ```bash
@@ -169,7 +179,8 @@ make test
 
 These checks validate Docker Compose syntax, documented environment variables, Liquibase
 migration conventions, Greenplum distribution clauses, ClickHouse engine/order clauses,
-gpfdist sample data, and executable shell entrypoints.
+gpfdist sample data, and executable shell entrypoints. Live stack checks also include
+Superset health.
 
 When the Docker Compose stack is already running, use `make test-stack` for integration
 checks against live PostgreSQL, Greenplum, ClickHouse, and NiFi services. This target is
@@ -187,6 +198,8 @@ For schema or stack changes, also validate with the smallest relevant Docker Com
 - For ClickHouse migration changes, build and run `liquibase-clickhouse`.
 - For Dockerfile or Compose changes, run `docker compose config` and, when practical,
   `docker compose up -d --build`.
+- For Superset changes, verify `superset` and `superset-db` health, then open
+  `http://localhost:8088` and check Greenplum/ClickHouse connection URIs.
 - For landing-zone or external-table changes, query the external table through `psql`.
 
 Some Docker builds download JDBC drivers from Maven Central, so they require network
@@ -284,6 +297,20 @@ access.
   `/opt/nifi/jdbc/clickhouse.jar`.
 - The landing directory is mounted in NiFi as `/data/landing`.
 
+## Superset Notes
+
+- Superset UI is available at `http://localhost:8088`.
+- Defaults are user `admin` and password `SupersetAdmin123`.
+- Superset metadata is stored in the dedicated `superset-db` PostgreSQL service.
+- The `superset_db_data` and `superset_home` Docker volumes store Superset state. Do not
+  remove them unless the user explicitly approves.
+- Greenplum SQLAlchemy URI:
+  `postgresql+psycopg2://gpadmin:gpadminpw@gpdb:5432/gpdb`.
+- Source PostgreSQL SQLAlchemy URI:
+  `postgresql+psycopg2://app:apppw@postgres:5432/app`.
+- ClickHouse SQLAlchemy URI:
+  `clickhousedb+connect://dwh:dwhpw@clickhouse:8123/dwh`.
+
 ## Deploy Notes
 
 Deployment is handled by `.github/workflows/deploy.yml` on pushes to `main` and manual
@@ -302,11 +329,11 @@ The workflow expects a self-hosted Linux runner with label `dwh-greenplum` and r
 
 The deploy script refuses to continue if tracked local changes exist in `APP_DIR`.
 It uses `git pull --ff-only origin main`, then `docker compose up -d --build`, then
-checks service status and NiFi health.
+checks service status plus NiFi and Superset health.
 
 ## Dangerous Areas
 
-- Do not delete Docker volumes such as `postgres_data`, `gpdata`, `clickhouse_data`, or NiFi volumes without
+- Do not delete Docker volumes such as `postgres_data`, `gpdata`, `clickhouse_data`, Superset volumes, or NiFi volumes without
   explicit user approval.
 - Do not run broad cleanup commands or destructive Git commands without explicit user
   approval.

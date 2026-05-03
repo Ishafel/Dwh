@@ -12,8 +12,10 @@ CLICKHOUSE_USER ?= dwh
 CLICKHOUSE_PASSWORD ?= dwhpw
 NIFI_PORT ?= 8443
 NIFI_HEALTH_URL ?= https://localhost:$(NIFI_PORT)/nifi/
+SUPERSET_PORT ?= 8088
+SUPERSET_HEALTH_URL ?= http://localhost:$(SUPERSET_PORT)/health
 
-.PHONY: test test-compose test-env test-migrations test-landing test-pxf test-shell test-stack test-stack-postgres test-stack-hive test-stack-greenplum test-stack-clickhouse test-stack-nifi
+.PHONY: test test-compose test-env test-migrations test-landing test-pxf test-shell test-stack test-stack-postgres test-stack-hive test-stack-greenplum test-stack-clickhouse test-stack-nifi test-stack-superset
 
 test: test-compose test-env test-migrations test-landing test-pxf test-shell
 
@@ -104,10 +106,11 @@ test-shell:
 	@test -x greenplum/start-gpfdist.sh
 	@test -x hive/start-metastore.sh
 	@test -x hive/init-example.sh
+	@test -x superset/start-superset.sh
 	@test -x scripts/deploy.sh
 	@test -x scripts/test.sh
 
-test-stack: test-stack-postgres test-stack-hive test-stack-greenplum test-stack-clickhouse test-stack-nifi
+test-stack: test-stack-postgres test-stack-hive test-stack-greenplum test-stack-clickhouse test-stack-nifi test-stack-superset
 
 test-stack-postgres:
 	@echo "==> Check live PostgreSQL"
@@ -133,3 +136,7 @@ test-stack-clickhouse:
 test-stack-nifi:
 	@echo "==> Check live NiFi"
 	@curl -kfsS "$(NIFI_HEALTH_URL)" >/dev/null
+
+test-stack-superset:
+	@echo "==> Check live Superset"
+	@curl -fsS "$(SUPERSET_HEALTH_URL)" >/dev/null
