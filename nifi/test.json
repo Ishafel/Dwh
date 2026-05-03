@@ -99,13 +99,13 @@
       "name" : "ExecuteSQL",
       "penaltyDuration" : "30 sec",
       "position" : {
-        "x" : -176.00002822856004,
-        "y" : -150.75780204760804
+        "x" : -176.0,
+        "y" : -152.0
       },
       "properties" : {
         "Set Auto Commit" : "true",
         "Max Wait Time" : "0 seconds",
-        "SQL Query" : "select 1 as \"test\";",
+        "SQL Query" : "SELECT s_adb_as_services_csoko_stg.f_refresh_table_v2_1\n('s_adb_as_services_csoko_ods', \n'customers', \n's_adb_as_services_csoko_ods',\n'v_src_customers',\ntrue, true);\n\nSELECT s_adb_as_services_csoko_stg.f_refresh_table_v2_1\n('s_adb_as_services_csoko_stg', \n'view_lineage', \n's_adb_as_services_csoko_stg',\n'v_src_view_lineage',\ntrue,\nfalse);",
         "Database Connection Pooling Service" : "4a3c65ac-37a8-34a1-ab9c-8c65d8fd3c66",
         "Default Decimal Scale" : "0",
         "Fetch Size" : "0",
@@ -245,6 +245,6 @@
   "snapshotMetadata" : {
     "author" : "admin",
     "flowIdentifier" : "test",
-    "timestamp" : 1776540274910
+    "timestamp" : 1777795319497
   }
 }
