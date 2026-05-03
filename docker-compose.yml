@@ -143,6 +143,61 @@ services:
       retries: 10
       start_period: 2m
 
+  superset-db:
+    image: postgres:${SUPERSET_POSTGRES_VERSION:-17.9}
+    hostname: superset-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${SUPERSET_META_DB:-superset}
+      POSTGRES_USER: ${SUPERSET_META_USER:-superset}
+      POSTGRES_PASSWORD: ${SUPERSET_META_PASSWORD:-supersetpw}
+    volumes:
+      - superset_db_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-superset} -d $${POSTGRES_DB:-superset} -h localhost -p 5432"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  superset:
+    build:
+      context: ./superset
+      args:
+        SUPERSET_VERSION: ${SUPERSET_VERSION:-6.0.0}
+    restart: unless-stopped
+    depends_on:
+      superset-db:
+        condition: service_healthy
+      liquibase-postgres:
+        condition: service_completed_successfully
+      liquibase-greenplum:
+        condition: service_completed_successfully
+      liquibase-clickhouse:
+        condition: service_completed_successfully
+    ports:
+      - "${SUPERSET_PORT:-8088}:8088"
+    environment:
+      SUPERSET_CONFIG_PATH: /app/pythonpath/superset_config.py
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-local-superset-secret-key-change-me}
+      SUPERSET_META_DATABASE_URI: postgresql+psycopg2://${SUPERSET_META_USER:-superset}:${SUPERSET_META_PASSWORD:-supersetpw}@superset-db:5432/${SUPERSET_META_DB:-superset}
+      SUPERSET_ADMIN_USERNAME: ${SUPERSET_ADMIN_USERNAME:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-SupersetAdmin123}
+      SUPERSET_ADMIN_FIRSTNAME: ${SUPERSET_ADMIN_FIRSTNAME:-DWH}
+      SUPERSET_ADMIN_LASTNAME: ${SUPERSET_ADMIN_LASTNAME:-Admin}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@example.com}
+    volumes:
+      - superset_home:/app/superset_home
+      - ./superset/superset_config.py:/app/pythonpath/superset_config.py:ro
+      - ./superset/start-superset.sh:/app/start-superset.sh:ro
+    command: ["/app/start-superset.sh"]
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8088/health', timeout=5).read()\""]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 2m
+
   clickhouse:
     image: clickhouse/clickhouse-server:${CLICKHOUSE_VERSION:-26.3.9.8}
     hostname: clickhouse
@@ -236,5 +291,7 @@ volumes:
   nifi_provenance_repository:
   nifi_state:
   nifi_logs:
+  superset_db_data:
+  superset_home:
   clickhouse_data:
   clickhouse_logs:
